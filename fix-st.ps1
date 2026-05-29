@@ -46,18 +46,17 @@ Disable-QuickEdit
 
 Function Show-Header {
     Write-Host " "
-    Write-Host " __        __                 __        __ " -ForegroundColor Cyan
-    Write-Host " \ \      / /   __ _    ___   \ \      / / " -ForegroundColor Cyan
-    Write-Host "  \ \ /\ / /   / _` |  / _ \   \ \ /\ / /  " -ForegroundColor DarkCyan
-    Write-Host "   \ V  V /   | (_| | | (_) |   \ V  V /   " -ForegroundColor Blue
-    Write-Host "    \_/\_/     \__,_|  \___/     \_/\_/    " -ForegroundColor Blue
+    Write-Host "  _      ___  ____  _____  _   _  ____  _____   " -ForegroundColor Cyan
+    Write-Host " | |    |_ _|| ___||  ___|| \ | |/ ___|| ____|  " -ForegroundColor Cyan
+    Write-Host " | |     | | | |   | |__  |  \| |\___ \|  _|    " -ForegroundColor DarkCyan
+    Write-Host " | |___  | | | |___|  ___|| |\  | ___) | |___   " -ForegroundColor Blue
+    Write-Host " |_____||___| \____||_____||_| \_||____/|_____|  " -ForegroundColor Blue
     Write-Host " "
     Write-Host "   ----------------------------------------------------" -ForegroundColor DarkGray
-    Write-Host "                    WaoW By SYS_0xA7                   " -ForegroundColor White
+    Write-Host "                   WaoW By SYS_0xA7                    " -ForegroundColor White
     Write-Host "   ----------------------------------------------------" -ForegroundColor DarkGray
     Write-Host " "
 }
-
 
 function Write-Log {
     param([string]$Message, [string]$Type = "INFO")
