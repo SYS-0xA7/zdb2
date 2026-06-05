@@ -19,6 +19,14 @@
       "enabled": true
     },
     {
+      "url": "https://raw.githubusercontent.com/sushi-dev55-alt/sushitools-games-repo-alt/refs/heads/main/<appid>.zip",
+      "enabled": true
+    },
+        {
+      "url": "https://raw.githubusercontent.com/skyflarefox/Skyapi/refs/heads/main/<appid>.zip",
+      "enabled": true
+    },
+        {
       "url": "https://codeload.github.com/SteamAutoCracks/ManifestHub/zip/refs/heads/<appid>",
       "enabled": true
     }
