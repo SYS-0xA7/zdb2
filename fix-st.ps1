@@ -262,43 +262,6 @@ Get-ChildItem $stpluginPath -Filter *.zor -File -Force | ForEach-Object { # -For
 
 
 
-# İçerik doğrulama fonksiyonu (Aynen korundu)
-function Test-ValidLuaLine {
-    param([string]$Line)
-    $trimmed = $Line.Trim()
-    if ([string]::IsNullOrWhiteSpace($trimmed)) { return $true }
-    if ($trimmed.StartsWith('-')) { return $true }
-    if ($trimmed -match '^(?i)(addappid|setManifestid|addtoken)') {
-        if ($trimmed -match '\(' -and $trimmed -match '\)') {
-            return $true
-        }
-    }
-    return $false
-}
-
-# Dosya içeriğini kontrol et ve temizle
-Get-ChildItem $stpluginPath -File | Where-Object {
-    $_.Extension -in @(".lua", ".zor")
-} | ForEach-Object {
-    $lines = Get-Content $_.FullName
-    $isClean = $true
-
-    foreach ($l in $lines) {
-        if (-not (Test-ValidLuaLine $l)) {
-            $isClean = $false
-            break
-        }
-    }
-
-    if ($isClean) {
-        Write-Log "Validated: $($_.Name)" "SUCCESS"
-    }
-    else {
-        Write-Log "Invalid content detected! Deleting: $($_.Name)" "ERROR"
-        Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
-    }
-}
-
 Write-Log "Checking for steam.cfg..." "STEP"
 $cfgFiles = @("steam.cfg", "Steam.cfg")
 foreach ($cfg in $cfgFiles) {
