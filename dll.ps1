@@ -62,6 +62,10 @@ Remove-ItemIfExists (Join-Path $steamPath "dwmapi.dll")
 Remove-ItemIfExists (Join-Path $steamPath "SYS_0xA7.dll")
 Remove-ItemIfExists (Join-Path $steamPath "xinput1_4.dll")
 Remove-ItemIfExists (Join-Path $steamPath "version.dll")
+Remove-ItemIfExists (Join-Path $steamPath "SYS_0xA7.dll")
+Remove-ItemIfExists (Join-Path $steamPath "OpenSteamTool.dll")
+Remove-ItemIfExists (Join-Path $steamPath "SYS_0xA7.toml")
+Remove-ItemIfExists (Join-Path $steamPath "opensteamtool.toml")
 
 # --- Ana Fonksiyon ---
 
