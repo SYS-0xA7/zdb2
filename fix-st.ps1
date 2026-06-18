@@ -241,6 +241,19 @@ Write-Log "Validating and Cleaning gamesdata folder..." "STEP"
 $zoreamAppData = $env:APPDATA
 $stpluginPath = Join-Path $zoreamAppData "gamesdata"
 
+
+$sysFolder = Join-Path $stpluginPath "SYS_0xA7"
+if (Test-Path $sysFolder) {
+    Remove-Item $sysFolder -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# depotkeys.json dosyasını sil
+$depotKeys = Join-Path $stpluginPath "depotkeys.json"
+if (Test-Path $depotKeys) {
+    Remove-Item $depotKeys -Force -ErrorAction SilentlyContinue
+}
+
+
 # --- EKLENEN KISIM: Gizli ve Sistem dosyalarını görünür yap ---
 if (Test-Path $stpluginPath) {
     Write-Log "Unlocking hidden/system files in gamesdata..." "STEP"
