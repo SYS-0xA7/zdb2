@@ -120,10 +120,31 @@ catch {
 
 # Find Steam
 try { $steamPath = (Get-ItemProperty "HKLM:\SOFTWARE\WOW6432Node\Valve\Steam").InstallPath } catch { $steamPath = $null }
-if (-not $steamPath) { Write-Log "Steam not found!" "ERROR"; exit 1 }
+if (-not $steamPath) {
+    Write-Log "Steam not found in registry, trying default x86 path..." "WARN"
+    $steamPath = "C:\Program Files (x86)\Steam"
+    if (-not (Test-Path $steamPath)) {
+        Write-Log "Steam not found!" "ERROR"
+        exit 1
+    }
+}
 
 $desktopPath = [Environment]::GetFolderPath("Desktop")
 $downloadsPath = Join-Path $env:USERPROFILE "Downloads"
+
+# Steam içindeki SYS_0xA7 ve opensteamtool klasörlerini temizle
+$sysSteamFolder = Join-Path $steamPath "SYS_0xA7"
+if (Test-Path $sysSteamFolder) {
+    Remove-Item $sysSteamFolder -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Log "Steam SYS_0xA7 folder removed." "SUCCESS"
+}
+
+$openSteamToolFolder = Join-Path $steamPath "opensteamtool"
+if (Test-Path $openSteamToolFolder) {
+    Remove-Item $openSteamToolFolder -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Log "Steam opensteamtool folder removed." "SUCCESS"
+}
+
 
 
 
