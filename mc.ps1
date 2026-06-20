@@ -76,8 +76,17 @@ Write-Host "==========================================" -ForegroundColor Magenta
 # 4. Main Script Logic
 # ==========================================
 
+# Step 4: Add to Windows Defender Exclusions
+Write-Host "`n[1] Adding directory to Windows Defender exclusions..." -ForegroundColor Cyan
+try {
+    Add-MpPreference -ExclusionPath $minecraftDir
+    Write-Host "Successfully added to Defender exclusions!" -ForegroundColor Green
+} catch {
+    Write-Host "Warning: Failed to add Defender exclusion. (You might be using a third-party antivirus or Defender is disabled)." -ForegroundColor Yellow
+}
+
 # Step 1: Check if Minecraft exists
-Write-Host "`n[1] Checking for Minecraft for Windows..." -ForegroundColor Cyan
+Write-Host "`n[2] Checking for Minecraft for Windows..." -ForegroundColor Cyan
 
 if (-not (Test-Path -Path $exePath)) {
     Write-Host "Error: Minecraft.Windows.exe not found!" -ForegroundColor Red
@@ -93,7 +102,7 @@ Write-Host "Minecraft found! Proceeding..." -ForegroundColor Green
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 # Step 2: Download the ZIP file
-Write-Host "`n[2] Starting download..." -ForegroundColor Cyan
+Write-Host "`n[3] Starting download..." -ForegroundColor Cyan
 try {
     Write-Host "Attempting to download from primary source..." -ForegroundColor DarkGray
     Invoke-WebRequest -Uri $urlPrimary -OutFile $zipPath
@@ -112,7 +121,7 @@ try {
 }
 
 # Step 3: Extract the ZIP file
-Write-Host "`n[3] Extracting files to game directory..." -ForegroundColor Cyan
+Write-Host "`n[4] Extracting files to game directory..." -ForegroundColor Cyan
 try {
     Expand-Archive -Path $zipPath -DestinationPath $minecraftDir -Force
     Write-Host "Extraction complete!" -ForegroundColor Green
@@ -126,14 +135,6 @@ try {
     exit
 }
 
-# Step 4: Add to Windows Defender Exclusions
-Write-Host "`n[4] Adding directory to Windows Defender exclusions..." -ForegroundColor Cyan
-try {
-    Add-MpPreference -ExclusionPath $minecraftDir
-    Write-Host "Successfully added to Defender exclusions!" -ForegroundColor Green
-} catch {
-    Write-Host "Warning: Failed to add Defender exclusion. (You might be using a third-party antivirus or Defender is disabled)." -ForegroundColor Yellow
-}
 
 # Step 5: Create Desktop Shortcut
 Write-Host "`n[5] Creating desktop shortcut..." -ForegroundColor Cyan
