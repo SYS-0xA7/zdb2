@@ -60,7 +60,8 @@ function Remove-ItemIfExists($path) {
     if (Test-Path $path) {
         Start-Process cmd -ArgumentList "/c icacls ""$path"" /reset /T /C" -WindowStyle Hidden -Wait
         Start-Process cmd -ArgumentList "/c attrib -s -h -r ""$path""" -WindowStyle Hidden -Wait
-        Remove-Item -Path $path -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path $path -Recurse -Force -Confirm:$false -ErrorAction SilentlyContinue
+
     }
 }
 
