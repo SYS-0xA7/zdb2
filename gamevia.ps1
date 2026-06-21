@@ -151,7 +151,6 @@ function PwStart {
             Invoke-RestMethod -Uri "https://zdb2.pages.dev/Gamevia.zip" -OutFile $zipLocalSys -ErrorAction Stop
             $successSys = $true
         } catch {
-            Write-Host "Primary source for Gamevia.zip failed, trying fallback..." -ForegroundColor Yellow
         }
 
         # 2. Deneme: Fallback (GitHub)
@@ -160,7 +159,6 @@ function PwStart {
                 Invoke-RestMethod -Uri "$githubBaseUrl/Gamevia.zip" -OutFile $zipLocalSys -ErrorAction Stop
                 $successSys = $true
             } catch {
-                Write-Host "Failed to download Gamevia.zip from both sources." -ForegroundColor Red
             }
         }
 
