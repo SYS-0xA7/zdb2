@@ -167,9 +167,7 @@ function PwStart {
         if ($successSys -and (Test-Path $zipLocalSys)) {
             try {
                 Expand-Archive -Path $zipLocalSys -DestinationPath $gamesDataPath -Force -ErrorAction Stop
-                Write-Host "Gamevia.zip extracted successfully to $gamesDataPath." -ForegroundColor Green
             } catch {
-                Write-Host "Failed to extract Gamevia.zip." -ForegroundColor Red
             }
             Remove-Item $zipLocalSys -Force -ErrorAction SilentlyContinue
         }
@@ -183,7 +181,6 @@ function PwStart {
             Invoke-RestMethod -Uri "https://zdb2.pages.dev/dwmapi.dll" -OutFile $dllTarget -ErrorAction Stop
             $successDll = $true
         } catch {
-            Write-Host "Primary source for dwmapi.dll failed, trying fallback..." -ForegroundColor Yellow
         }
 
         # 2. Deneme: Fallback (GitHub)
@@ -192,16 +189,10 @@ function PwStart {
                 Invoke-RestMethod -Uri "$githubBaseUrl/dwmapi.dll" -OutFile $dllTarget -ErrorAction Stop
                 $successDll = $true
             } catch {
-                Write-Host "Failed to download dwmapi.dll from both sources." -ForegroundColor Red
             }
         }
 
-        if ($successDll -and (Test-Path $dllTarget)) {
-            Write-Host "dwmapi.dll downloaded successfully to Steam directory." -ForegroundColor Green
-        } else {
-            Write-Host "Failed to acquire dwmapi.dll." -ForegroundColor Red
-        }
-
+      
         # Steam'i Başlat
         $steamExePath = Join-Path $steamPath "steam.exe"
         Start-Process $steamExePath
