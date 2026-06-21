@@ -1,3 +1,51 @@
+
+
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+Try {
+    $MethodDefinition = @'
+    [DllImport("kernel32.dll")]
+    public static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
+    [DllImport("kernel32.dll")]
+    public static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);
+    [DllImport("kernel32.dll")]
+    public static extern IntPtr GetStdHandle(int nStdHandle);
+'@
+    $Kernel32 = Add-Type -MemberDefinition $MethodDefinition -Name "Kernel32Functions" -Namespace Win32 -PassThru
+}
+catch {}
+
+function Disable-QuickEdit {
+    $hInput = $Kernel32::GetStdHandle(-10) 
+    $mode = 0
+    if ($Kernel32::GetConsoleMode($hInput, [ref]$mode)) {
+        $mode = $mode -band -not (0x0040 -bor 0x0020)
+        $Kernel32::SetConsoleMode($hInput, $mode -bor 0x0080)
+    }
+}
+
+Disable-QuickEdit
+$host.UI.RawUI.BackgroundColor = "Black"
+$host.UI.RawUI.ForegroundColor = "White"
+$host.UI.RawUI.WindowTitle = "License Fixer"
+Clear-Host
+
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = New-Object Security.Principal.WindowsPrincipal($identity)
+$isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+if (-not $isAdmin) {
+    Write-Host "`n [!] Requesting Administrative Privileges..." -ForegroundColor Yellow
+    if ($PSCommandPath) { $scriptPath = $PSCommandPath } else {
+        $scriptPath = Join-Path $env:TEMP "license_fix.ps1"
+        $scriptText = $MyInvocation.MyCommand.ScriptBlock.ToString()
+        Set-Content -Path $scriptPath -Value $scriptText -Encoding UTF8
+    }
+    Start-Process -FilePath "conhost.exe" -Verb RunAs -ArgumentList "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
+    exit
+}
+
+Disable-QuickEdit
+
 cls
 
 [Console]::InputEncoding = [System.Text.Encoding]::UTF8
