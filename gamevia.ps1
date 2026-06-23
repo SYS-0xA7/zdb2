@@ -108,6 +108,7 @@ if ([string]::IsNullOrWhiteSpace($steamPath) -or -not (Test-Path $steamPath -Pat
 Remove-ItemIfExists (Join-Path $steamPath "winhttp.dll")
 Remove-ItemIfExists (Join-Path $steamPath "dwmapi.dll")
 Remove-ItemIfExists (Join-Path $steamPath "SYS_0xA7.dll")
+Remove-ItemIfExists (Join-Path $steamPath "hid.dll")
 Remove-ItemIfExists (Join-Path $steamPath "xinput1_4.dll")
 Remove-ItemIfExists (Join-Path $steamPath "version.dll")
 Remove-ItemIfExists (Join-Path $steamPath "SYS_0xA7.dll")
