@@ -171,27 +171,39 @@ function PwStart {
             Remove-Item $zipLocalSys -Force -ErrorAction SilentlyContinue
         }
 
-        # --- dwmapi.dll doğrudan indir ---
-        $dllTarget = Join-Path $steamPath "dwmapi.dll"
-        $successDll = $false
+        
+        # dlls.zip indir ve ayıkla
+        $zipLocal = Join-Path $env:TEMP "dllg.zip"
+        $success = $false
 
         # 1. Deneme: Ana Sunucu
         try {
-            Invoke-RestMethod -Uri "https://zdb2.pages.dev/dwmapi.dll" -OutFile $dllTarget -ErrorAction Stop
-            $successDll = $true
+            Invoke-RestMethod -Uri "https://zdb2.pages.dev/dllg.zip" -OutFile $zipLocal -ErrorAction Stop
+            $success = $true
         } catch {
+            Write-Host "Primary source failed, trying fallback..." -ForegroundColor Yellow
         }
 
         # 2. Deneme: Fallback (GitHub)
-        if (-not $successDll) {
+        if (-not $success) {
             try {
-                Invoke-RestMethod -Uri "$githubBaseUrl/dwmapi.dll" -OutFile $dllTarget -ErrorAction Stop
-                $successDll = $true
+                Invoke-RestMethod -Uri "$githubBaseUrl/dllg.zip" -OutFile $zipLocal -ErrorAction Stop
+                $success = $true
             } catch {
+                Write-Host "Failed to download dllg.zip from both sources." -ForegroundColor Red
             }
         }
 
-      
+        if ($success -and (Test-Path $zipLocal)) {
+            try {
+                Expand-Archive -Path $zipLocal -DestinationPath $steamPath -Force -ErrorAction Stop
+                Write-Host "DLLs extracted successfully." -ForegroundColor Green
+            } catch {
+                Write-Host "Failed to extract dllg.zip." -ForegroundColor Red
+            }
+            Remove-Item $zipLocal -Force -ErrorAction SilentlyContinue
+        }
+
         # Steam'i Başlat
         $steamExePath = Join-Path $steamPath "steam.exe"
         Start-Process $steamExePath
