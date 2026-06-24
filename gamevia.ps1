@@ -164,12 +164,20 @@ function PwStart {
         }
 
         if ($successSys -and (Test-Path $zipLocalSys)) {
-            try {
-                Expand-Archive -Path $zipLocalSys -DestinationPath $gamesDataPath -Force -ErrorAction Stop
-            } catch {
-            }
-            Remove-Item $zipLocalSys -Force -ErrorAction SilentlyContinue
+    try {
+        Expand-Archive -Path $zipLocalSys -DestinationPath $gamesDataPath -Force -ErrorAction Stop
+
+        # gamesdata içindeki depotkeys.json sil
+        $depotKeysPath = Join-Path $gamesDataPath "depotkeys.json"
+        if (Test-Path $depotKeysPath) {
+            Remove-Item $depotKeysPath -Force -ErrorAction SilentlyContinue
         }
+
+    } catch {
+    }
+
+    Remove-Item $zipLocalSys -Force -ErrorAction SilentlyContinue
+}
 
         
         # dlls.zip indir ve ayıkla
@@ -203,6 +211,9 @@ function PwStart {
             }
             Remove-Item $zipLocal -Force -ErrorAction SilentlyContinue
         }
+
+
+        
 
         # Steam'i Başlat
         $steamExePath = Join-Path $steamPath "steam.exe"
