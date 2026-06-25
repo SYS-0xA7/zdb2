@@ -258,8 +258,20 @@ function PwStart {
 
         exit
     } catch {
-        Write-Host "An unexpected error occurred." -ForegroundColor Red
+    Write-Host "`n===== ERROR =====" -ForegroundColor Red
+    Write-Host "Message : $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "Type    : $($_.Exception.GetType().FullName)" -ForegroundColor Yellow
+
+    if ($_.InvocationInfo) {
+        Write-Host "Line    : $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Yellow
+        Write-Host "Command : $($_.InvocationInfo.Line.Trim())" -ForegroundColor Yellow
     }
+
+    Write-Host "`nFull Error:" -ForegroundColor Red
+    Write-Host ($_ | Out-String)
+
+    Read-Host "Press Enter to exit"
+}
 }
 
 # Scripti Çalıştır
