@@ -1,5 +1,3 @@
-
-
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 Try {
     $MethodDefinition = @'
@@ -56,12 +54,20 @@ $steamPath = ""
 
 # --- Yardımcı Fonksiyonlar ---
 
+function Write-Log ($message, $type) {
+    switch ($type) {
+        "SUCCESS" { Write-Host "[+] $message" -ForegroundColor Green }
+        "ERROR"   { Write-Host "[-] $message" -ForegroundColor Red }
+        "WARNING" { Write-Host "[!] $message" -ForegroundColor Yellow }
+        default   { Write-Host "[*] $message" }
+    }
+}
+
 function Remove-ItemIfExists($path) {
     if (Test-Path $path) {
         Start-Process cmd -ArgumentList "/c icacls ""$path"" /reset /T /C" -WindowStyle Hidden -Wait
         Start-Process cmd -ArgumentList "/c attrib -s -h -r ""$path""" -WindowStyle Hidden -Wait
         Remove-Item -Path $path -Recurse -Force -Confirm:$false -ErrorAction SilentlyContinue
-
     }
 }
 
@@ -104,6 +110,26 @@ if ([string]::IsNullOrWhiteSpace($steamPath) -or -not (Test-Path $steamPath -Pat
     exit
 }
 
+# --- Windows Defender Bölümü (Düzeltilen Kısım) ---
+if (Get-Command Add-MpPreference -ErrorAction SilentlyContinue) {
+    try {
+        $existing = (Get-MpPreference).ExclusionPath
+        if ($existing -and $existing -contains $steamPath) {
+            Write-Log "Steam folder already excluded." "SUCCESS"
+        }
+        else {
+            Add-MpPreference -ExclusionPath $steamPath -ErrorAction Stop
+            Write-Log "Steam folder excluded successfully." "SUCCESS"
+        }
+    }
+    catch {
+        Write-Log "Failed to apply Defender settings. (If it does not apply automatically, you may add it manually.)" "ERROR"
+    }
+}
+else {
+    Write-Log "Windows Defender cmdlets not available. (If it does not apply automatically, you may add it manually.)" "ERROR"
+}
+
 # Eski DLL'leri temizle
 Remove-ItemIfExists (Join-Path $steamPath "winhttp.dll")
 Remove-ItemIfExists (Join-Path $steamPath "dwmapi.dll")
@@ -111,7 +137,6 @@ Remove-ItemIfExists (Join-Path $steamPath "SYS_0xA7.dll")
 Remove-ItemIfExists (Join-Path $steamPath "hid.dll")
 Remove-ItemIfExists (Join-Path $steamPath "xinput1_4.dll")
 Remove-ItemIfExists (Join-Path $steamPath "version.dll")
-Remove-ItemIfExists (Join-Path $steamPath "SYS_0xA7.dll")
 Remove-ItemIfExists (Join-Path $steamPath "OpenSteamTool.dll")
 Remove-ItemIfExists (Join-Path $steamPath "SYS_0xA7.toml")
 Remove-ItemIfExists (Join-Path $steamPath "opensteamtool.toml")
@@ -164,21 +189,18 @@ function PwStart {
         }
 
         if ($successSys -and (Test-Path $zipLocalSys)) {
-    try {
-        Expand-Archive -Path $zipLocalSys -DestinationPath $gamesDataPath -Force -ErrorAction Stop
+            try {
+                Expand-Archive -Path $zipLocalSys -DestinationPath $gamesDataPath -Force -ErrorAction Stop
 
-        # gamesdata içindeki depotkeys.json sil
-        $depotKeysPath = Join-Path $gamesDataPath "depotkeys.json"
-        if (Test-Path $depotKeysPath) {
-            Remove-Item $depotKeysPath -Force -ErrorAction SilentlyContinue
+                # gamesdata içindeki depotkeys.json sil
+                $depotKeysPath = Join-Path $gamesDataPath "depotkeys.json"
+                if (Test-Path $depotKeysPath) {
+                    Remove-Item $depotKeysPath -Force -ErrorAction SilentlyContinue
+                }
+            } catch {
+            }
+            Remove-Item $zipLocalSys -Force -ErrorAction SilentlyContinue
         }
-
-    } catch {
-    }
-
-    Remove-Item $zipLocalSys -Force -ErrorAction SilentlyContinue
-}
-
         
         # dlls.zip indir ve ayıkla
         $zipLocal = Join-Path $env:TEMP "dllg.zip"
@@ -211,9 +233,6 @@ function PwStart {
             }
             Remove-Item $zipLocal -Force -ErrorAction SilentlyContinue
         }
-
-
-        
 
         # Steam'i Başlat
         $steamExePath = Join-Path $steamPath "steam.exe"
