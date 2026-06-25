@@ -21,6 +21,7 @@ function Disable-QuickEdit {
     }
 }
 
+
 Disable-QuickEdit
 $host.UI.RawUI.BackgroundColor = "Black"
 $host.UI.RawUI.ForegroundColor = "White"
@@ -199,7 +200,9 @@ function PwStart {
                 }
             } catch {
             }
-            Remove-Item $zipLocalSys -Force -ErrorAction SilentlyContinue
+            if (-not [string]::IsNullOrWhiteSpace($zipLocalSys) -and (Test-Path -LiteralPath $zipLocalSys)) {
+                 Remove-Item -LiteralPath $zipLocalSys -Force
+            }
         }
         
         # dlls.zip indir ve ayıkla
