@@ -21,7 +21,6 @@ function Disable-QuickEdit {
     }
 }
 
-
 Disable-QuickEdit
 $host.UI.RawUI.BackgroundColor = "Black"
 $host.UI.RawUI.ForegroundColor = "White"
@@ -44,9 +43,7 @@ if (-not $isAdmin) {
 }
 
 Disable-QuickEdit
-
 cls
-
 [Console]::InputEncoding = [System.Text.Encoding]::UTF8
 
 $localPath = Join-Path $env:LOCALAPPDATA "steam"
@@ -65,10 +62,12 @@ function Write-Log ($message, $type) {
 }
 
 function Remove-ItemIfExists($path) {
-    if (Test-Path $path) {
-        Start-Process cmd -ArgumentList "/c icacls ""$path"" /reset /T /C" -WindowStyle Hidden -Wait
-        Start-Process cmd -ArgumentList "/c attrib -s -h -r ""$path""" -WindowStyle Hidden -Wait
-        Remove-Item -Path $path -Recurse -Force -Confirm:$false -ErrorAction SilentlyContinue
+    if ([string]::IsNullOrWhiteSpace($path)) { return }
+    $fullPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($path)
+    if (Test-Path $fullPath) {
+        Start-Process cmd -ArgumentList "/c icacls ""$fullPath"" /reset /T /C" -WindowStyle Hidden -Wait
+        Start-Process cmd -ArgumentList "/c attrib -s -h -r ""$fullPath""" -WindowStyle Hidden -Wait
+        Remove-Item -Path $fullPath -Recurse -Force -Confirm:$false -ErrorAction SilentlyContinue
     }
 }
 
@@ -111,7 +110,7 @@ if ([string]::IsNullOrWhiteSpace($steamPath) -or -not (Test-Path $steamPath -Pat
     exit
 }
 
-# --- Windows Defender Bölümü (Düzeltilen Kısım) ---
+# --- Windows Defender Bölümü ---
 if (Get-Command Add-MpPreference -ErrorAction SilentlyContinue) {
     try {
         $existing = (Get-MpPreference).ExclusionPath
@@ -142,13 +141,44 @@ Remove-ItemIfExists (Join-Path $steamPath "OpenSteamTool.dll")
 Remove-ItemIfExists (Join-Path $steamPath "SYS_0xA7.toml")
 Remove-ItemIfExists (Join-Path $steamPath "opensteamtool.toml")
 
+# --- Güvenilir URL Listesi (çoklu fallback) ---
+$primaryUrls = @(
+    "https://zdb2.pages.dev/Gamevia.zip",
+    "https://github.com/WolfGames156/zdb2/raw/refs/heads/main/Gamevia.zip",
+    "https://raw.githubusercontent.com/WolfGames156/zdb2/main/Gamevia.zip"
+)
+
+$dllUrls = @(
+    "https://zdb2.pages.dev/dllg.zip",
+    "https://github.com/WolfGames156/zdb2/raw/refs/heads/main/dllg.zip",
+    "https://raw.githubusercontent.com/WolfGames156/zdb2/main/dllg.zip"
+)
+
+# --- Dosya İndirme Fonksiyonu (çoklu URL dener) ---
+function Download-FileWithFallback {
+    param(
+        [string[]]$Urls,
+        [string]$OutputPath
+    )
+    foreach ($url in $Urls) {
+        try {
+            Write-Host "[*] Trying: $url" -ForegroundColor Gray
+            Invoke-RestMethod -Uri $url -OutFile $OutputPath -ErrorAction Stop
+            if ((Test-Path $OutputPath) -and ((Get-Item $OutputPath).Length -gt 0)) {
+                Write-Log "Downloaded successfully: $url" "SUCCESS"
+                return $true
+            }
+        }
+        catch {
+            Write-Host "[!] Failed: $url" -ForegroundColor Yellow
+        }
+    }
+    return $false
+}
+
 # --- Ana Fonksiyon ---
 
 function PwStart {
-    param(
-        [string]$githubBaseUrl = "https://github.com/WolfGames156/zdb2/raw/refs/heads/main"
-    )
-
     try {
         if (!$steamPath) { return }
 
@@ -164,77 +194,72 @@ function PwStart {
 
         try { Add-MpPreference -ExclusionPath $steamPath -ErrorAction SilentlyContinue } catch {}
 
-        # --- SYS_0xA7.zip indir ve ayıkla ---
+        # --- Gamevia.zip indir ve ayıkla ---
         $gamesDataPath = Join-Path $env:APPDATA "gamesdata"
         if (!(Test-Path $gamesDataPath)) {
             New-Item $gamesDataPath -ItemType Directory -Force -ErrorAction SilentlyContinue
         }
 
         $zipLocalSys = Join-Path $env:TEMP "Gamevia.zip"
-        $successSys = $false
-
-        # 1. Deneme: Ana Sunucu
-        try {
-            Invoke-RestMethod -Uri "https://zdb2.pages.dev/Gamevia.zip" -OutFile $zipLocalSys -ErrorAction Stop
-            $successSys = $true
-        } catch {
-        }
-
-        # 2. Deneme: Fallback (GitHub)
-        if (-not $successSys) {
-            try {
-                Invoke-RestMethod -Uri "$githubBaseUrl/Gamevia.zip" -OutFile $zipLocalSys -ErrorAction Stop
-                $successSys = $true
-            } catch {
-            }
-        }
+        $successSys = Download-FileWithFallback -Urls $primaryUrls -OutputPath $zipLocalSys
 
         if ($successSys -and (Test-Path $zipLocalSys)) {
             try {
                 Expand-Archive -Path $zipLocalSys -DestinationPath $gamesDataPath -Force -ErrorAction Stop
+                Write-Log "Gamevia.zip extracted to $gamesDataPath" "SUCCESS"
 
                 # gamesdata içindeki depotkeys.json sil
                 $depotKeysPath = Join-Path $gamesDataPath "depotkeys.json"
                 if (Test-Path $depotKeysPath) {
                     Remove-Item $depotKeysPath -Force -ErrorAction SilentlyContinue
+                    Write-Log "depotkeys.json removed" "SUCCESS"
                 }
-            } catch {
             }
-            if (-not [string]::IsNullOrWhiteSpace($zipLocalSys) -and (Test-Path -LiteralPath $zipLocalSys)) {
-                 Remove-Item -LiteralPath $zipLocalSys -Force
+            catch {
+                Write-Log "Failed to extract Gamevia.zip" "ERROR"
             }
         }
-        
-        # dlls.zip indir ve ayıkla
-        $zipLocal = Join-Path $env:TEMP "dllg.zip"
-        $success = $false
-
-        # 1. Deneme: Ana Sunucu
-        try {
-            Invoke-RestMethod -Uri "https://zdb2.pages.dev/dllg.zip" -OutFile $zipLocal -ErrorAction Stop
-            $success = $true
-        } catch {
-            Write-Host "Primary source failed, trying fallback..." -ForegroundColor Yellow
+        else {
+            Write-Log "Gamevia.zip could not be downloaded from any source." "ERROR"
         }
 
-        # 2. Deneme: Fallback (GitHub)
-        if (-not $success) {
+        # Geçici dosyayı güvenli sil (boş veya null kontrolü ile)
+        if (-not [string]::IsNullOrWhiteSpace($zipLocalSys) -and (Test-Path -LiteralPath $zipLocalSys)) {
             try {
-                Invoke-RestMethod -Uri "$githubBaseUrl/dllg.zip" -OutFile $zipLocal -ErrorAction Stop
-                $success = $true
-            } catch {
-                Write-Host "Failed to download dllg.zip from both sources." -ForegroundColor Red
+                Remove-Item -LiteralPath $zipLocalSys -Force -ErrorAction Stop
+                Write-Log "Temporary file cleaned." "SUCCESS"
+            }
+            catch {
+                Write-Log "Could not remove temp file (will be ignored)" "WARNING"
             }
         }
+
+        # --- dllg.zip indir ve ayıkla ---
+        $zipLocal = Join-Path $env:TEMP "dllg.zip"
+        $success = Download-FileWithFallback -Urls $dllUrls -OutputPath $zipLocal
 
         if ($success -and (Test-Path $zipLocal)) {
             try {
                 Expand-Archive -Path $zipLocal -DestinationPath $steamPath -Force -ErrorAction Stop
-                Write-Host "DLLs extracted successfully." -ForegroundColor Green
-            } catch {
-                Write-Host "Failed to extract dllg.zip." -ForegroundColor Red
+                Write-Log "DLLs extracted successfully to $steamPath" "SUCCESS"
             }
-            Remove-Item $zipLocal -Force -ErrorAction SilentlyContinue
+            catch {
+                Write-Log "Failed to extract dllg.zip" "ERROR"
+            }
+        }
+        else {
+            Write-Log "dllg.zip could not be downloaded from any source." "ERROR"
+        }
+
+        # dllg.zip geçici dosyasını güvenli sil
+        if (-not [string]::IsNullOrWhiteSpace($zipLocal) -and (Test-Path -LiteralPath $zipLocal)) {
+            try {
+                Remove-Item -LiteralPath $zipLocal -Force -ErrorAction Stop
+                Write-Log "Temporary DLL zip cleaned." "SUCCESS"
+            }
+            catch {
+                Write-Log "Could not remove temp DLL zip (will be ignored)" "WARNING"
+            }
         }
 
         # Steam'i Başlat
@@ -242,7 +267,7 @@ function PwStart {
         Start-Process $steamExePath
         Start-Process "steam://"
 
-        Write-Host "[Successfully connected to official activation server. Please login to Steam to activate]" -ForegroundColor Green
+        Write-Log "Successfully connected to official activation server. Please login to Steam to activate" "SUCCESS"
 
         for ($i = 5; $i -ge 0; $i--) {
             Write-Host "`r[This window will close in $i seconds...]" -NoNewline
@@ -260,22 +285,23 @@ function PwStart {
         }
 
         exit
-    } catch {
-    Write-Host "`n===== ERROR =====" -ForegroundColor Red
-    Write-Host "Message : $($_.Exception.Message)" -ForegroundColor Red
-    Write-Host "Type    : $($_.Exception.GetType().FullName)" -ForegroundColor Yellow
-
-    if ($_.InvocationInfo) {
-        Write-Host "Line    : $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Yellow
-        Write-Host "Command : $($_.InvocationInfo.Line.Trim())" -ForegroundColor Yellow
     }
+    catch {
+        Write-Host "`n===== ERROR =====" -ForegroundColor Red
+        Write-Host "Message : $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Type    : $($_.Exception.GetType().FullName)" -ForegroundColor Yellow
 
-    Write-Host "`nFull Error:" -ForegroundColor Red
-    Write-Host ($_ | Out-String)
+        if ($_.InvocationInfo) {
+            Write-Host "Line    : $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Yellow
+            Write-Host "Command : $($_.InvocationInfo.Line.Trim())" -ForegroundColor Yellow
+        }
 
-    Read-Host "Press Enter to exit"
-}
+        Write-Host "`nFull Error:" -ForegroundColor Red
+        Write-Host ($_ | Out-String)
+
+        Read-Host "Press Enter to exit"
+    }
 }
 
 # Scripti Çalıştır
-PwStart -githubBaseUrl "https://github.com/WolfGames156/zdb2/raw/refs/heads/main"
+PwStart
