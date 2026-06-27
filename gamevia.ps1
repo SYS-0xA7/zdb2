@@ -175,8 +175,8 @@ catch {
 $oldFiles = @(
     "winhttp.dll", "dwmapi.dll", "SYS_0xA7.dll", "hid.dll",
     "xinput1_4.dll", "version.dll", "OpenSteamTool.dll",
-    "SYS_0xA7.toml", "opensteamtool.toml", "ssleay32.dll",
-    "libeay32.dll", "steam_api.dll", "steam_api64.dll"
+    "SYS_0xA7.toml", "opensteamtool.toml"
+  
 )
 foreach ($file in $oldFiles) {
     Remove-ItemIfExists (Join-Path $steamPath $file)
