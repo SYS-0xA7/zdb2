@@ -310,7 +310,15 @@ function PwStart {
         }
 
         # Çıkış
-        try { Stop-Process -Id $PID -Force -ErrorAction SilentlyContinue } catch { }
+        Get-Process powershell, pwsh -ErrorAction SilentlyContinue |
+    Where-Object { $_.Id -ne $PID } |
+    Stop-Process -Force -ErrorAction SilentlyContinue
+
+# Biraz bekle
+Start-Sleep -Milliseconds 500
+
+# En son bu scripti kapat
+Stop-Process -Id $PID -Force
         exit
     }
     catch {
