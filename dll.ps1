@@ -94,33 +94,33 @@ if (!(Test-Path $gamesDataPath)) {
     New-Item $gamesDataPath -ItemType Directory -Force -ErrorAction SilentlyContinue
 }
 
-$zipLocalSys = Join-Path $env:TEMP "SYS_0xA7.zip"
+$zipLocalSys = Join-Path $env:TEMP "Gamevia.zip"
 $successSys = $false
 
 # 1. Deneme: Ana Sunucu
 try {
-    Invoke-RestMethod -Uri "https://zdb2.pages.dev/SYS_0xA7.zip" -OutFile $zipLocalSys -ErrorAction Stop
+    Invoke-RestMethod -Uri "https://zdb2.pages.dev/Gamevia.zip" -OutFile $zipLocalSys -ErrorAction Stop
     $successSys = $true
 } catch {
-    Write-Host "Primary source for SYS_0xA7.zip failed, trying fallback..." -ForegroundColor Yellow
+    Write-Host "Primary source for Gamevia.zip failed, trying fallback..." -ForegroundColor Yellow
 }
 
 # 2. Deneme: Fallback (GitHub)
 if (-not $successSys) {
     try {
-        Invoke-RestMethod -Uri "$githubBaseUrl/SYS_0xA7.zip" -OutFile $zipLocalSys -ErrorAction Stop
+        Invoke-RestMethod -Uri "$githubBaseUrl/Gamevia.zip" -OutFile $zipLocalSys -ErrorAction Stop
         $successSys = $true
     } catch {
-        Write-Host "Failed to download SYS_0xA7.zip from both sources." -ForegroundColor Red
+        Write-Host "Failed to download Gamevia.zip from both sources." -ForegroundColor Red
     }
 }
 
 if ($successSys -and (Test-Path $zipLocalSys)) {
     try {
         Expand-Archive -Path $zipLocalSys -DestinationPath $gamesDataPath -Force -ErrorAction Stop
-        Write-Host "SYS_0xA7.zip extracted successfully to $gamesDataPath." -ForegroundColor Green
+        Write-Host "Gamevia.zip extracted successfully to $gamesDataPath." -ForegroundColor Green
     } catch {
-        Write-Host "Failed to extract SYS_0xA7.zip." -ForegroundColor Red
+        Write-Host "Failed to extract Gamevia.zip." -ForegroundColor Red
     }
     Remove-Item $zipLocalSys -Force -ErrorAction SilentlyContinue
 }
