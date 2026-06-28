@@ -304,7 +304,7 @@ function PwStart {
 
         Write-Log "License fix applied. Please login to Steam to activate." "SUCCESS"
 
-        for ($i = 5; $i -ge 0; $i--) {
+        for ($i = 3; $i -ge 0; $i--) {
             Write-Host "`r[*] This window will close in $i seconds...   " -NoNewline
             Start-Sleep -Seconds 1
         }
