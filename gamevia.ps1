@@ -328,3 +328,4 @@ function PwStart {
 
 # Scripti Çalıştır
 PwStart
+exit
