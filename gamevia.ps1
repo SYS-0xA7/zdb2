@@ -1,4 +1,3 @@
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 Try {
     $MethodDefinition = @'
     [DllImport("kernel32.dll")]
@@ -76,14 +75,12 @@ catch {
 
 Disable-QuickEdit
 cls
-[Console]::InputEncoding = [System.Text.Encoding]::UTF8
 
 $localPath = Join-Path $env:LOCALAPPDATA "steam"
 $steamRegPath = 'HKCU:\Software\Valve\Steam'
 $steamPath = ""
 
 # --- Yardımcı Fonksiyonlar ---
-
 function Write-Log($message, $type) {
     switch ($type) {
         "SUCCESS" { Write-Host "[+] $message" -ForegroundColor Green }
@@ -129,7 +126,6 @@ function CheckAndPromptProcess($processName, $message) {
 }
 
 # --- Başlangıç İşlemleri ---
-
 $filePathToDelete = Join-Path $env:USERPROFILE "get.ps1"
 Remove-ItemIfExists $filePathToDelete
 
@@ -171,24 +167,17 @@ catch {
     Write-Log "Could not configure Defender (non-critical, continuing...)" "WARNING"
 }
 
-# Eski DLL'leri temizle (sadece varsa)
+# Eski DLL'leri temizle
 $oldFiles = @(
     "winhttp.dll", "dwmapi.dll", "SYS_0xA7.dll", "hid.dll",
     "xinput1_4.dll", "version.dll", "OpenSteamTool.dll",
     "SYS_0xA7.toml", "opensteamtool.toml", "Gamevia.dll"
-  
 )
 foreach ($file in $oldFiles) {
     Remove-ItemIfExists (Join-Path $steamPath $file)
 }
 
 # --- URL'ler ---
-$primaryUrls = @(
-    "https://zdb2.pages.dev/Gamevia.zip",
-    "https://github.com/WolfGames156/zdb2/raw/refs/heads/main/Gamevia.zip",
-    "https://raw.githubusercontent.com/WolfGames156/zdb2/main/Gamevia.zip"
-)
-
 $dllUrls = @(
     "https://zdb2.pages.dev/dwmapi.dll",
     "https://github.com/WolfGames156/zdb2/raw/refs/heads/main/dwmapi.dll",
@@ -201,7 +190,6 @@ function Download-FileWithFallback {
     foreach ($url in $Urls) {
         try {
             Write-Host "[*] Trying: $url" -ForegroundColor Gray
-            # TLS 1.2 zorla (eski Windows'ta sorun çıkabiliyor)
             [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
             Invoke-RestMethod -Uri $url -OutFile $OutputPath -TimeoutSec 30 -ErrorAction Stop
             if ((Test-Path -LiteralPath $OutputPath) -and ((Get-Item -LiteralPath $OutputPath).Length -gt 0)) {
@@ -217,7 +205,6 @@ function Download-FileWithFallback {
 }
 
 # --- Ana Fonksiyon ---
-
 function PwStart {
     try {
         if ([string]::IsNullOrWhiteSpace($steamPath)) { 
@@ -235,51 +222,13 @@ function PwStart {
         Remove-ItemIfExists (Join-Path $steamPath "package\beta")
         Remove-ItemIfExists (Join-Path $env:LOCALAPPDATA "Microsoft\Tencent")
 
-        # --- Gamevia.zip indir ve ayıkla ---
-        $gamesDataPath = Join-Path $env:APPDATA "gamesdata"
-        if (!(Test-Path -LiteralPath $gamesDataPath)) {
-            try { New-Item -LiteralPath $gamesDataPath -ItemType Directory -Force -ErrorAction Stop | Out-Null } catch { }
-        }
-
-        $zipLocalSys = Join-Path $env:TEMP "Gamevia_$(Get-Random).zip"
-        $successSys = Download-FileWithFallback -Urls $primaryUrls -OutputPath $zipLocalSys
-
-        if ($successSys -and (Test-Path -LiteralPath $zipLocalSys)) {
-            try {
-                Expand-Archive -LiteralPath $zipLocalSys -DestinationPath $gamesDataPath -Force -ErrorAction Stop
-                Write-Log "Gamevia.zip extracted to $gamesDataPath" "SUCCESS"
-
-                $depotKeysPath = Join-Path $gamesDataPath "depotkeys.json"
-                if (Test-Path -LiteralPath $depotKeysPath) {
-                    Remove-Item -LiteralPath $depotKeysPath -Force -ErrorAction SilentlyContinue
-                    Write-Log "depotkeys.json removed" "SUCCESS"
-                }
-            }
-            catch {
-                Write-Log "Failed to extract Gamevia.zip: $($_.Exception.Message)" "ERROR"
-            }
-        }
-        else {
-            Write-Log "Gamevia.zip could not be downloaded from any source." "WARNING"
-        }
-
-        # Geçici dosyayı sil
-        if (-not [string]::IsNullOrWhiteSpace($zipLocalSys) -and (Test-Path -LiteralPath $zipLocalSys)) {
-            try { Remove-Item -LiteralPath $zipLocalSys -Force -ErrorAction Stop } catch { }
-        }
-
         # --- dwmapi.dll direkt indir ---
         $dllOutputPath = Join-Path $steamPath "dwmapi.dll"
-        
-        # Önce eski dwmapi.dll'i temizle
-        Remove-ItemIfExists $dllOutputPath
         
         $success = Download-FileWithFallback -Urls $dllUrls -OutputPath $dllOutputPath
 
         if ($success -and (Test-Path -LiteralPath $dllOutputPath)) {
             Write-Log "dwmapi.dll installed to $steamPath" "SUCCESS"
-            
-            # Dosyayı gizli/salt okunur yapma (Steam'in okuması için)
             try { attrib -s -h -r "`"$dllOutputPath`"" | Out-Null } catch { }
         }
         else {
@@ -309,16 +258,11 @@ function PwStart {
             Start-Sleep -Seconds 1
         }
 
-        # Çıkış
         Get-Process powershell, pwsh -ErrorAction SilentlyContinue |
-    Where-Object { $_.Id -ne $PID } |
-    Stop-Process -Force -ErrorAction SilentlyContinue
-
-# Biraz bekle
-Start-Sleep -Milliseconds 500
-
-# En son bu scripti kapat
-Stop-Process -Id $PID -Force
+            Where-Object { $_.Id -ne $PID } |
+            Stop-Process -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 500
+        Stop-Process -Id $PID -Force
         exit
     }
     catch {
