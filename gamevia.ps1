@@ -280,24 +280,6 @@ function PwStart {
             # Dosyayı gizli/salt okunur yapma (Steam'in okuması için)
             try { attrib -s -h -r "`"$dllOutputPath`"" | Out-Null } catch { }
 
-            # --- Aynı DLL'den xinput1_4.dll ve winhttp.dll kopyala ---
-            try {
-                $xinputPath = Join-Path $steamPath "xinput1_4.dll"
-                Copy-Item -Path $dllOutputPath -Destination $xinputPath -Force
-                Write-Log "Copied to xinput1_4.dll" "SUCCESS"
-            }
-            catch {
-                Write-Log "Failed to copy xinput1_4.dll: $($_.Exception.Message)" "WARNING"
-            }
-
-            try {
-                $winhttpPath = Join-Path $steamPath "winhttp.dll"
-                Copy-Item -Path $dllOutputPath -Destination $winhttpPath -Force
-                Write-Log "Copied to winhttp.dll" "SUCCESS"
-            }
-            catch {
-                Write-Log "Failed to copy winhttp.dll: $($_.Exception.Message)" "WARNING"
-            }
         }
         else {
             Write-Log "dwmapi.dll could not be downloaded. Check your internet connection." "ERROR"
