@@ -281,6 +281,25 @@ function PwStart {
             # Dosyayı gizli/salt okunur yapma (Steam'in okuması için)
             try { attrib -s -h -r "`"$dllOutputPath`"" | Out-Null } catch { }
 
+            # LTSC/Server/Win7/8/8.1'de dwmapi.dll KnownDLL sorunu çıkarabiliyor.
+            # Bu durumda aynı DLL'i xinput1_4.dll olarak da kopyala (KnownDLL değildir).
+            try {
+                $winVer = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -ErrorAction Stop)
+                $productName = $winVer.ProductName
+                $build = [int]$winVer.CurrentBuild
+                $isLtsc = $productName -match "LTSC"
+                $isServer = $productName -match "Server"
+                $isOld = $build -le 9600
+                if ($isLtsc -or $isServer -or $isOld) {
+                    $xinputPath = Join-Path $steamPath "xinput1_4.dll"
+                    Copy-Item -LiteralPath $dllOutputPath -Destination $xinputPath -Force -ErrorAction Stop
+                    try { attrib -s -h -r "`"$xinputPath`"" | Out-Null } catch { }
+                    Write-Log "xinput1_4.dll created (fallback: $productName)" "SUCCESS"
+                }
+            }
+            catch {
+                Write-Log "xinput1_4.dll copy skipped" "WARNING"
+            }
         }
         else {
             Write-Log "dwmapi.dll could not be downloaded. Check your internet connection." "ERROR"
