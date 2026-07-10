@@ -61,8 +61,7 @@ if ([string]::IsNullOrWhiteSpace(`$steamPath) -or -not (Test-Path `$steamPath -P
 try {
     Invoke-RestMethod -Uri `$dllUrl -OutFile `$dllOutput -ErrorAction Stop
     Write-Host "[+] dwmapi.dll installed successfully!" -ForegroundColor Green
-    Copy-Item -Path `$dllOutput -Destination (Join-Path `$steamPath "xinput1_4.dll") -Force
-    Write-Host "[+] xinput1_4.dll and winhttp.dll also installed!" -ForegroundColor Green
+
 }
 catch {
     Write-Host "[-] Download failed." -ForegroundColor Red
