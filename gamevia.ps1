@@ -1,3 +1,4 @@
+
 Try {
     $MethodDefinition = @'
     [DllImport("kernel32.dll")]
