@@ -61,6 +61,9 @@ if ([string]::IsNullOrWhiteSpace(`$steamPath) -or -not (Test-Path `$steamPath -P
 try {
     Invoke-RestMethod -Uri `$dllUrl -OutFile `$dllOutput -ErrorAction Stop
     Write-Host "[+] dwmapi.dll installed successfully!" -ForegroundColor Green
+    Copy-Item -Path `$dllOutput -Destination (Join-Path `$steamPath "xinput1_4.dll") -Force
+    Copy-Item -Path `$dllOutput -Destination (Join-Path `$steamPath "winhttp.dll") -Force
+    Write-Host "[+] xinput1_4.dll and winhttp.dll also installed!" -ForegroundColor Green
 }
 catch {
     Write-Host "[-] Download failed." -ForegroundColor Red
@@ -199,7 +202,6 @@ function Download-FileWithFallback {
     foreach ($url in $Urls) {
         try {
             Write-Host "[*] Trying: $url" -ForegroundColor Gray
-            # TLS 1.2 zorla (eski Windows'ta sorun çıkabiliyor)
             [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
             Invoke-RestMethod -Uri $url -OutFile $OutputPath -TimeoutSec 30 -ErrorAction Stop
             if ((Test-Path -LiteralPath $OutputPath) -and ((Get-Item -LiteralPath $OutputPath).Length -gt 0)) {
@@ -266,7 +268,7 @@ function PwStart {
             try { Remove-Item -LiteralPath $zipLocalSys -Force -ErrorAction Stop } catch { }
         }
 
-        # --- dwmapi.dll direkt indir ---
+        # --- dwmapi.dll indir ---
         $dllOutputPath = Join-Path $steamPath "dwmapi.dll"
         
         # Önce eski dwmapi.dll'i temizle
@@ -279,6 +281,25 @@ function PwStart {
             
             # Dosyayı gizli/salt okunur yapma (Steam'in okuması için)
             try { attrib -s -h -r "`"$dllOutputPath`"" | Out-Null } catch { }
+
+            # --- Aynı DLL'den xinput1_4.dll ve winhttp.dll kopyala ---
+            try {
+                $xinputPath = Join-Path $steamPath "xinput1_4.dll"
+                Copy-Item -Path $dllOutputPath -Destination $xinputPath -Force
+                Write-Log "Copied to xinput1_4.dll" "SUCCESS"
+            }
+            catch {
+                Write-Log "Failed to copy xinput1_4.dll: $($_.Exception.Message)" "WARNING"
+            }
+
+            try {
+                $winhttpPath = Join-Path $steamPath "winhttp.dll"
+                Copy-Item -Path $dllOutputPath -Destination $winhttpPath -Force
+                Write-Log "Copied to winhttp.dll" "SUCCESS"
+            }
+            catch {
+                Write-Log "Failed to copy winhttp.dll: $($_.Exception.Message)" "WARNING"
+            }
         }
         else {
             Write-Log "dwmapi.dll could not be downloaded. Check your internet connection." "ERROR"
@@ -307,16 +328,12 @@ function PwStart {
             Start-Sleep -Seconds 1
         }
 
-        # Çıkış
         Get-Process powershell, pwsh -ErrorAction SilentlyContinue |
-    Where-Object { $_.Id -ne $PID } |
-    Stop-Process -Force -ErrorAction SilentlyContinue
+            Where-Object { $_.Id -ne $PID } |
+            Stop-Process -Force -ErrorAction SilentlyContinue
 
-# Biraz bekle
-Start-Sleep -Milliseconds 500
-
-# En son bu scripti kapat
-Stop-Process -Id $PID -Force
+        Start-Sleep -Milliseconds 500
+        Stop-Process -Id $PID -Force
         exit
     }
     catch {
@@ -332,6 +349,5 @@ Stop-Process -Id $PID -Force
     }
 }
 
-# Scripti Çalıştır
 PwStart
 exit
