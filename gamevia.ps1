@@ -352,7 +352,7 @@ Write-Log "Selected DLL for hijacking: $targetDll" "SUCCESS"
 
 # Eski DLL'leri temizle
 $oldFiles = @(
-    "winhttp.dll", "dwmapi.dll", "SYS_0xA7.dll", "hid.dll",
+    "winhttp.dll", "dwmapi.dll.bak", "winhttp.dll.bak", "xinput1_4.dll.bak", "dwmapi_update.dll", "winhttp_update.dll", "xinput1_4_update.dll", "dwmapi.dll", "SYS_0xA7.dll", "hid.dll",
     "xinput1_4.dll", "version.dll", "winmm.dll","OpenSteamTool.dll",
     "SYS_0xA7.toml", "opensteamtool.toml", "Gamevia.dll"
 )
