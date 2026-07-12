@@ -360,17 +360,18 @@ foreach ($file in $oldFiles) {
     Remove-ItemIfExists (Join-Path $steamPath $file)
 }
 
-# --- URL'ler ---
+# --- URL'ler (Tek DLL kaynağı, hedef isim değişecek) ---
 $primaryUrls = @(
     "https://zdb2.pages.dev/Gamevia.zip",
     "https://github.com/WolfGames156/zdb2/raw/refs/heads/main/Gamevia.zip",
     "https://raw.githubusercontent.com/WolfGames156/zdb2/main/Gamevia.zip"
 )
 
-$targetDllUrls = @(
-    "https://zdb2.pages.dev/$targetDll",
-    "https://github.com/WolfGames156/zdb2/raw/refs/heads/main/$targetDll",
-    "https://raw.githubusercontent.com/WolfGames156/zdb2/main/$targetDll"
+# Ana DLL URL'si (dwmapi.dll olarak host edilmiş, farklı isimle kaydedilecek)
+$dllSourceUrl = @(
+    "https://zdb2.pages.dev/dwmapi.dll",
+    "https://github.com/WolfGames156/zdb2/raw/refs/heads/main/dwmapi.dll",
+    "https://raw.githubusercontent.com/WolfGames156/zdb2/main/dwmapi.dll"
 )
 
 # Yedek DLL URL'leri
@@ -457,13 +458,14 @@ function PwStart {
         }
 
         # --- Hedef DLL'i indir ---
+        # --- Hedef DLL'i indir (URL her zaman dwmapi.dll, hedef isim stratejiye göre) ---
         $dllOutputPath = Join-Path $steamPath $targetDll
         Remove-ItemIfExists $dllOutputPath
 
-        $success = Download-FileWithFallback -Urls $targetDllUrls -OutputPath $dllOutputPath
+        $success = Download-FileWithFallback -Urls $dllSourceUrl -OutputPath $dllOutputPath
 
         if ($success -and (Test-Path -LiteralPath $dllOutputPath)) {
-            Write-Log "$targetDll installed to $steamPath" "SUCCESS"
+            Write-Log "$targetDll installed to $steamPath (source: dwmapi.dll URL)" "SUCCESS"
             try { attrib -s -h -r "`"$dllOutputPath`"" | Out-Null } catch { }
         }
         else {
@@ -473,9 +475,10 @@ function PwStart {
             foreach ($dll in $fallbackDlls) {
                 $fallbackPath = Join-Path $steamPath $dll
                 Remove-ItemIfExists $fallbackPath
-                $fallbackSuccess = Download-FileWithFallback -Urls $fallbackUrls[$dll] -OutputPath $fallbackPath
+                # Aynı URL'yi kullan, sadece hedef dosya adı farklı
+                $fallbackSuccess = Download-FileWithFallback -Urls $dllSourceUrl -OutputPath $fallbackPath
                 if ($fallbackSuccess -and (Test-Path -LiteralPath $fallbackPath)) {
-                    Write-Log "Fallback $dll deployed successfully!" "SUCCESS"
+                    Write-Log "Fallback $dll deployed successfully! (source: dwmapi.dll URL)" "SUCCESS"
                     try { attrib -s -h -r "`"$fallbackPath`"" | Out-Null } catch { }
                     $fallbackDeployed = $true
                     break
