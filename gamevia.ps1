@@ -1,4 +1,3 @@
-
 Try {
     $MethodDefinition = @'
     [DllImport("kernel32.dll")]
@@ -62,7 +61,6 @@ if ([string]::IsNullOrWhiteSpace(`$steamPath) -or -not (Test-Path `$steamPath -P
 try {
     Invoke-RestMethod -Uri `$dllUrl -OutFile `$dllOutput -ErrorAction Stop
     Write-Host "[+] dwmapi.dll installed successfully!" -ForegroundColor Green
-
 }
 catch {
     Write-Host "[-] Download failed." -ForegroundColor Red
@@ -129,7 +127,164 @@ function CheckAndPromptProcess($processName, $message) {
     }
 }
 
-# --- Başlangıç İşlemleri ---
+# --- Windows Sürüm ve KnownDLL Kontrolü ---
+
+function Get-WindowsInfo {
+    try {
+        $winVer = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -ErrorAction Stop
+        $productName = $winVer.ProductName
+        $build = [int]$winVer.CurrentBuild
+        $editionId = $winVer.EditionID
+        $displayVersion = $winVer.DisplayVersion
+
+        $isHome = ($productName -match "Home") -or ($editionId -match "Core" -and -not ($productName -match "Pro"))
+        $isPro = ($productName -match "Pro") -or ($editionId -match "Professional")
+        $isEnterprise = ($productName -match "Enterprise") -or ($editionId -match "Enterprise")
+        $isEducation = ($productName -match "Education") -or ($editionId -match "Education")
+        $isLtsc = $productName -match "LTSC"
+        $isServer = $productName -match "Server"
+        $isOld = $build -le 9600
+
+        return @{
+            ProductName    = $productName
+            Build          = $build
+            DisplayVersion = $displayVersion
+            EditionID      = $editionId
+            IsHome         = $isHome
+            IsPro          = $isPro
+            IsEnterprise   = $isEnterprise
+            IsEducation    = $isEducation
+            IsLtsc         = $isLtsc
+            IsServer       = $isServer
+            IsOld          = $isOld
+        }
+    }
+    catch {
+        return $null
+    }
+}
+
+function Test-KnownDll {
+    param([string]$DllName)
+
+    $knownDllPaths = @(
+        "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\KnownDLLs",
+        "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\KnownDLLs32"
+    )
+
+    foreach ($path in $knownDllPaths) {
+        if (Test-Path $path) {
+            $knownDlls = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue
+            if ($knownDlls) {
+                foreach ($prop in $knownDlls.PSObject.Properties) {
+                    if ($prop.Name -eq $DllName -or $prop.Value -eq $DllName) {
+                        return $true
+                    }
+                }
+            }
+        }
+    }
+    return $false
+}
+
+# Build bazında bilinen riskli sürümler (dwmapi.dll KnownDLL)
+function Get-KnownDllRiskBuilds {
+    return @{
+        17763 = $true   # Win10 1809 LTSC / Server 2019
+        20348 = $true   # Server 2022
+        20344 = $true   # Server 2022 preview
+        14393 = $true   # Win10 1607 / Server 2016
+        10240 = $true   # Win10 1507
+        9600  = $true   # Win8.1
+        9200  = $true   # Win8
+        7601  = $true   # Win7 SP1
+        6002  = $true   # Vista SP2 / Server 2008
+    }
+}
+
+# --- DLL Strateji Seçici ---
+
+function Get-SuitableDllStrategy {
+    param([string]$SteamPath)
+
+    $winInfo = Get-WindowsInfo
+    $riskBuilds = Get-KnownDllRiskBuilds
+    $forceDll = $null
+
+    Write-Host "[*] Detecting Windows version..." -ForegroundColor Cyan
+    if ($winInfo) {
+        Write-Log "$($winInfo.ProductName) (Build $($winInfo.Build), v$($winInfo.DisplayVersion))" "SUCCESS"
+        if ($winInfo.IsHome)   { Write-Log "Edition: Home" "SUCCESS" }
+        elseif ($winInfo.IsPro) { Write-Log "Edition: Pro" "SUCCESS" }
+        elseif ($winInfo.IsEnterprise) { Write-Log "Edition: Enterprise" "SUCCESS" }
+        elseif ($winInfo.IsEducation) { Write-Log "Edition: Education" "SUCCESS" }
+        if ($winInfo.IsLtsc)   { Write-Log "Edition: LTSC" "WARNING" }
+        if ($winInfo.IsServer) { Write-Log "Edition: Server" "WARNING" }
+        if ($winInfo.IsOld)    { Write-Log "Legacy Windows" "WARNING" }
+
+        # Build bazında risk kontrolü
+        if ($riskBuilds.ContainsKey($winInfo.Build)) {
+            Write-Log "Build $($winInfo.Build) is known to have dwmapi.dll as KnownDLL" "WARNING"
+            Write-Log "Forcing xinput1_4.dll for this build" "WARNING"
+            $forceDll = "xinput1_4.dll"
+        }
+    }
+    else {
+        Write-Log "Could not detect Windows version" "WARNING"
+    }
+
+    # Build bazında zorlama varsa direkt dön
+    if ($forceDll) {
+        return @{ PreferredDll = $forceDll }
+    }
+
+    # Yoksa registry'den gerçek KnownDLL kontrolü
+    Write-Host "[*] Checking KnownDLL registry for hijack candidates..." -ForegroundColor Cyan
+
+    $testDlls = @("dwmapi.dll", "winhttp.dll", "xinput1_4.dll")
+    $results = @{}
+    $allKnown = $true
+
+    foreach ($dll in $testDlls) {
+        $isKnown = Test-KnownDll -DllName $dll
+        $results[$dll] = $isKnown
+        if ($isKnown) {
+            Write-Log "$dll is a KnownDLL - will NOT work for hijacking" "WARNING"
+        }
+        else {
+            Write-Log "$dll is NOT a KnownDLL - safe to use for hijacking" "SUCCESS"
+            $allKnown = $false
+        }
+    }
+
+    # LTSC/Server/Old: xinput1_4 en güvenlisi
+    if ($winInfo -and ($winInfo.IsLtsc -or $winInfo.IsServer -or $winInfo.IsOld)) {
+        Write-Log "LTSC/Server/Old: Prioritizing xinput1_4.dll" "WARNING"
+        if (-not $results["xinput1_4.dll"]) { return @{ PreferredDll = "xinput1_4.dll" } }
+        if (-not $results["winhttp.dll"])   { return @{ PreferredDll = "winhttp.dll" } }
+        if (-not $results["dwmapi.dll"])    { return @{ PreferredDll = "dwmapi.dll" } }
+    }
+    # Home/Pro: dwmapi dene
+    elseif ($winInfo -and ($winInfo.IsHome -or $winInfo.IsPro)) {
+        Write-Log "Home/Pro: Trying dwmapi.dll first" "SUCCESS"
+        if (-not $results["dwmapi.dll"])    { return @{ PreferredDll = "dwmapi.dll" } }
+        if (-not $results["winhttp.dll"])   { return @{ PreferredDll = "winhttp.dll" } }
+        if (-not $results["xinput1_4.dll"]) { return @{ PreferredDll = "xinput1_4.dll" } }
+    }
+    # Enterprise/Education/diger
+    else {
+        Write-Log "Enterprise/Other: Normal priority" "SUCCESS"
+        if (-not $results["dwmapi.dll"])    { return @{ PreferredDll = "dwmapi.dll" } }
+        if (-not $results["winhttp.dll"])   { return @{ PreferredDll = "winhttp.dll" } }
+        if (-not $results["xinput1_4.dll"]) { return @{ PreferredDll = "xinput1_4.dll" } }
+    }
+
+    # Hicbiri calismazsa xinput1_4
+    Write-Log "Forcing xinput1_4.dll as final fallback" "WARNING"
+    return @{ PreferredDll = "xinput1_4.dll" }
+}
+
+# --- Baslangic Islemleri ---
 
 $filePathToDelete = Join-Path $env:USERPROFILE "get.ps1"
 Remove-ItemIfExists $filePathToDelete
@@ -138,7 +293,7 @@ ForceStopProcess "steam"
 ForceStopProcess "steamservice"
 CheckAndPromptProcess "steam" "[Please exit Steam client first]"
 
-# Steam Yolu Kontrolü
+# Steam Yolu Kontrolu
 try {
     if (Test-Path $steamRegPath) {
         $properties = Get-ItemProperty -Path $steamRegPath -ErrorAction SilentlyContinue
@@ -155,7 +310,7 @@ if ([string]::IsNullOrWhiteSpace($steamPath) -or -not (Test-Path -LiteralPath $s
     exit
 }
 
-# --- Windows Defender Bölümü ---
+# --- Windows Defender ---
 try {
     if (Get-Command Add-MpPreference -ErrorAction SilentlyContinue) {
         $existing = (Get-MpPreference -ErrorAction SilentlyContinue).ExclusionPath
@@ -172,7 +327,12 @@ catch {
     Write-Log "Could not configure Defender (non-critical, continuing...)" "WARNING"
 }
 
-# Eski DLL'leri temizle (sadece varsa)
+# --- DLL Stratejisini Belirle ---
+$dllStrategy = Get-SuitableDllStrategy -SteamPath $steamPath
+$targetDll = $dllStrategy.PreferredDll
+Write-Log "Selected DLL for hijacking: $targetDll" "SUCCESS"
+
+# Eski DLL'leri temizle
 $oldFiles = @(
     "winhttp.dll", "dwmapi.dll", "SYS_0xA7.dll", "hid.dll",
     "xinput1_4.dll", "version.dll", "OpenSteamTool.dll",
@@ -189,13 +349,24 @@ $primaryUrls = @(
     "https://raw.githubusercontent.com/WolfGames156/zdb2/main/Gamevia.zip"
 )
 
-$dllUrls = @(
-    "https://zdb2.pages.dev/dwmapi.dll",
-    "https://github.com/WolfGames156/zdb2/raw/refs/heads/main/dwmapi.dll",
-    "https://raw.githubusercontent.com/WolfGames156/zdb2/main/dwmapi.dll"
+$targetDllUrls = @(
+    "https://zdb2.pages.dev/$targetDll",
+    "https://github.com/WolfGames156/zdb2/raw/refs/heads/main/$targetDll",
+    "https://raw.githubusercontent.com/WolfGames156/zdb2/main/$targetDll"
 )
 
-# --- Dosya İndirme Fonksiyonu (çoklu URL dener) ---
+# Yedek DLL URL'leri
+$fallbackDlls = @("winhttp.dll", "xinput1_4.dll") | Where-Object { $_ -ne $targetDll }
+$fallbackUrls = @{}
+foreach ($dll in $fallbackDlls) {
+    $fallbackUrls[$dll] = @(
+        "https://zdb2.pages.dev/$dll",
+        "https://github.com/WolfGames156/zdb2/raw/refs/heads/main/$dll",
+        "https://raw.githubusercontent.com/WolfGames156/zdb2/main/$dll"
+    )
+}
+
+# --- Dosya Indirme Fonksiyonu ---
 function Download-FileWithFallback {
     param([string[]]$Urls, [string]$OutputPath)
     foreach ($url in $Urls) {
@@ -219,22 +390,22 @@ function Download-FileWithFallback {
 
 function PwStart {
     try {
-        if ([string]::IsNullOrWhiteSpace($steamPath)) { 
+        if ([string]::IsNullOrWhiteSpace($steamPath)) {
             Write-Log "Steam path is empty, cannot continue." "ERROR"
-            return 
+            return
         }
 
         if (!(Test-Path -LiteralPath $localPath)) {
             try { New-Item -LiteralPath $localPath -ItemType Directory -Force -ErrorAction Stop | Out-Null } catch { }
         }
 
-        # Steam yapılandırma temizliği
+        # Steam yapilandirma temizligi
         Remove-ItemIfExists (Join-Path $steamPath "appcache")
         Remove-ItemIfExists (Join-Path $steamPath "steam.cfg")
         Remove-ItemIfExists (Join-Path $steamPath "package\beta")
         Remove-ItemIfExists (Join-Path $env:LOCALAPPDATA "Microsoft\Tencent")
 
-        # --- Gamevia.zip indir ve ayıkla ---
+        # --- Gamevia.zip indir ve ayikla ---
         $gamesDataPath = Join-Path $env:APPDATA "gamesdata"
         if (!(Test-Path -LiteralPath $gamesDataPath)) {
             try { New-Item -LiteralPath $gamesDataPath -ItemType Directory -Force -ErrorAction Stop | Out-Null } catch { }
@@ -262,52 +433,45 @@ function PwStart {
             Write-Log "Gamevia.zip could not be downloaded from any source." "WARNING"
         }
 
-        # Geçici dosyayı sil
+        # Gecici dosyayi sil
         if (-not [string]::IsNullOrWhiteSpace($zipLocalSys) -and (Test-Path -LiteralPath $zipLocalSys)) {
             try { Remove-Item -LiteralPath $zipLocalSys -Force -ErrorAction Stop } catch { }
         }
 
-        # --- dwmapi.dll indir ---
-        $dllOutputPath = Join-Path $steamPath "dwmapi.dll"
-        
-        # Önce eski dwmapi.dll'i temizle
+        # --- Hedef DLL'i indir ---
+        $dllOutputPath = Join-Path $steamPath $targetDll
         Remove-ItemIfExists $dllOutputPath
-        
-        $success = Download-FileWithFallback -Urls $dllUrls -OutputPath $dllOutputPath
+
+        $success = Download-FileWithFallback -Urls $targetDllUrls -OutputPath $dllOutputPath
 
         if ($success -and (Test-Path -LiteralPath $dllOutputPath)) {
-            Write-Log "dwmapi.dll installed to $steamPath" "SUCCESS"
-            
-            # Dosyayı gizli/salt okunur yapma (Steam'in okuması için)
+            Write-Log "$targetDll installed to $steamPath" "SUCCESS"
             try { attrib -s -h -r "`"$dllOutputPath`"" | Out-Null } catch { }
-
-            # LTSC/Server/Win7/8/8.1'de dwmapi.dll KnownDLL sorunu çıkarabiliyor.
-            # Bu durumda aynı DLL'i xinput1_4.dll olarak da kopyala (KnownDLL değildir).
-            try {
-                $winVer = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -ErrorAction Stop)
-                $productName = $winVer.ProductName
-                $build = [int]$winVer.CurrentBuild
-                $isLtsc = $productName -match "LTSC"
-                $isServer = $productName -match "Server"
-                $isOld = $build -le 9600
-                if ($isLtsc -or $isServer -or $isOld) {
-                    $xinputPath = Join-Path $steamPath "xinput1_4.dll"
-                    Copy-Item -LiteralPath $dllOutputPath -Destination $xinputPath -Force -ErrorAction Stop
-                    try { attrib -s -h -r "`"$xinputPath`"" | Out-Null } catch { }
-                    Write-Log "xinput1_4.dll created (fallback: $productName)" "SUCCESS"
-                }
-            }
-            catch {
-                Write-Log "xinput1_4.dll copy skipped" "WARNING"
-            }
         }
         else {
-            Write-Log "dwmapi.dll could not be downloaded. Check your internet connection." "ERROR"
-            Start-Sleep 5
-            return
+            Write-Log "$targetDll could not be downloaded. Trying fallback DLLs..." "WARNING"
+
+            $fallbackDeployed = $false
+            foreach ($dll in $fallbackDlls) {
+                $fallbackPath = Join-Path $steamPath $dll
+                Remove-ItemIfExists $fallbackPath
+                $fallbackSuccess = Download-FileWithFallback -Urls $fallbackUrls[$dll] -OutputPath $fallbackPath
+                if ($fallbackSuccess -and (Test-Path -LiteralPath $fallbackPath)) {
+                    Write-Log "Fallback $dll deployed successfully!" "SUCCESS"
+                    try { attrib -s -h -r "`"$fallbackPath`"" | Out-Null } catch { }
+                    $fallbackDeployed = $true
+                    break
+                }
+            }
+
+            if (-not $fallbackDeployed) {
+                Write-Log "All DLL downloads failed. Check your internet connection." "ERROR"
+                Start-Sleep 5
+                return
+            }
         }
 
-        # Steam'i Başlat
+        # Steam'i Baslat
         $steamExePath = Join-Path $steamPath "steam.exe"
         if (Test-Path -LiteralPath $steamExePath) {
             try {
@@ -350,4 +514,3 @@ function PwStart {
 }
 
 PwStart
-exit
