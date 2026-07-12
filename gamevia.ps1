@@ -137,6 +137,9 @@ function Get-WindowsInfo {
         $editionId = $winVer.EditionID
         $displayVersion = $winVer.DisplayVersion
 
+        # Windows 11 tespiti (build 22000+ ve productName "Windows 11" veya "11" içeriyor)
+        $isWin11 = ($build -ge 22000) -or ($productName -match "11")
+        
         $isHome = ($productName -match "Home") -or ($editionId -match "Core" -and -not ($productName -match "Pro"))
         $isPro = ($productName -match "Pro") -or ($editionId -match "Professional")
         $isEnterprise = ($productName -match "Enterprise") -or ($editionId -match "Enterprise")
@@ -145,11 +148,17 @@ function Get-WindowsInfo {
         $isServer = $productName -match "Server"
         $isOld = $build -le 9600
 
+        # Eğer Win11 ise productName'i düzelt
+        if ($isWin11 -and $productName -notmatch "11") {
+            $productName = "Windows 11 " + ($productName -replace "Windows 10 ", "")
+        }
+
         return @{
             ProductName    = $productName
             Build          = $build
             DisplayVersion = $displayVersion
             EditionID      = $editionId
+            IsWin11        = $isWin11
             IsHome         = $isHome
             IsPro          = $isPro
             IsEnterprise   = $isEnterprise
@@ -199,6 +208,10 @@ function Get-KnownDllRiskBuilds {
         9200  = $true   # Win8
         7601  = $true   # Win7 SP1
         6002  = $true   # Vista SP2 / Server 2008
+        # Windows 11 riskli build'ler (varsa)
+        22621 = $false  # Win11 22H2 - genelde sorun yok
+        22631 = $false  # Win11 23H2 - genelde sorun yok
+        26100 = $false  # Win11 24H2 - genelde sorun yok
     }
 }
 
@@ -265,8 +278,13 @@ function Get-SuitableDllStrategy {
         if (-not $results["dwmapi.dll"])    { return @{ PreferredDll = "dwmapi.dll" } }
     }
     # Home/Pro: dwmapi dene
+    # Home/Pro (Win10 veya Win11): dwmapi dene
     elseif ($winInfo -and ($winInfo.IsHome -or $winInfo.IsPro)) {
-        Write-Log "Home/Pro: Trying dwmapi.dll first" "SUCCESS"
+        if ($winInfo.IsWin11) {
+            Write-Log "Windows 11 $($winInfo.EditionID): Trying dwmapi.dll first" "SUCCESS"
+        } else {
+            Write-Log "Windows 10 $($winInfo.EditionID): Trying dwmapi.dll first" "SUCCESS"
+        }
         if (-not $results["dwmapi.dll"])    { return @{ PreferredDll = "dwmapi.dll" } }
         if (-not $results["winhttp.dll"])   { return @{ PreferredDll = "winhttp.dll" } }
         if (-not $results["xinput1_4.dll"]) { return @{ PreferredDll = "xinput1_4.dll" } }
