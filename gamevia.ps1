@@ -374,17 +374,6 @@ $dllSourceUrl = @(
     "https://raw.githubusercontent.com/WolfGames156/zdb2/main/dwmapi.dll"
 )
 
-# Yedek DLL URL'leri
-$fallbackDlls = @("winhttp.dll", "xinput1_4.dll") | Where-Object { $_ -ne $targetDll }
-$fallbackUrls = @{}
-foreach ($dll in $fallbackDlls) {
-    $fallbackUrls[$dll] = @(
-        "https://zdb2.pages.dev/$dll",
-        "https://github.com/WolfGames156/zdb2/raw/refs/heads/main/$dll",
-        "https://raw.githubusercontent.com/WolfGames156/zdb2/main/$dll"
-    )
-}
-
 # --- Dosya Indirme Fonksiyonu ---
 function Download-FileWithFallback {
     param([string[]]$Urls, [string]$OutputPath)
