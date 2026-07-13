@@ -216,7 +216,6 @@ function Get-KnownDllRiskBuilds {
 }
 
 # --- DLL Strateji Seçici ---
-
 function Get-SuitableDllStrategy {
     param([string]$SteamPath)
 
@@ -254,7 +253,8 @@ function Get-SuitableDllStrategy {
     # Yoksa registry'den gerçek KnownDLL kontrolü
     Write-Host "[*] Checking KnownDLL registry for hijack candidates..." -ForegroundColor Cyan
 
-    $testDlls = @("dwmapi.dll", "winhttp.dll", "xinput1_4.dll")
+    # ÖNCELİK: winhttp.dll > dwmapi.dll > xinput1_4.dll
+    $testDlls = @("winhttp.dll", "dwmapi.dll", "xinput1_4.dll")
     $results = @{}
     $allKnown = $true
 
@@ -270,31 +270,18 @@ function Get-SuitableDllStrategy {
         }
     }
 
-    # LTSC/Server/Old: xinput1_4 en güvenlisi
-    if ($winInfo -and ($winInfo.IsLtsc -or $winInfo.IsServer -or $winInfo.IsOld)) {
-        Write-Log "LTSC/Server/Old: Prioritizing xinput1_4.dll" "WARNING"
-        if (-not $results["xinput1_4.dll"]) { return @{ PreferredDll = "xinput1_4.dll" } }
-        if (-not $results["winhttp.dll"])   { return @{ PreferredDll = "winhttp.dll" } }
-        if (-not $results["dwmapi.dll"])    { return @{ PreferredDll = "dwmapi.dll" } }
+    # Yeni sıra: winhttp > dwmapi > xinput1_4
+    if (-not $results["winhttp.dll"]) {
+        Write-Log "Using winhttp.dll (preferred - most stable)" "SUCCESS"
+        return @{ PreferredDll = "winhttp.dll" }
     }
-    # Home/Pro: dwmapi dene
-    # Home/Pro (Win10 veya Win11): dwmapi dene
-    elseif ($winInfo -and ($winInfo.IsHome -or $winInfo.IsPro)) {
-        if ($winInfo.IsWin11) {
-            Write-Log "Windows 11 $($winInfo.EditionID): Trying dwmapi.dll first" "SUCCESS"
-        } else {
-            Write-Log "Windows 10 $($winInfo.EditionID): Trying dwmapi.dll first" "SUCCESS"
-        }
-        if (-not $results["dwmapi.dll"])    { return @{ PreferredDll = "dwmapi.dll" } }
-        if (-not $results["winhttp.dll"])   { return @{ PreferredDll = "winhttp.dll" } }
-        if (-not $results["xinput1_4.dll"]) { return @{ PreferredDll = "xinput1_4.dll" } }
+    elseif (-not $results["dwmapi.dll"]) {
+        Write-Log "winhttp.dll is KnownDLL, falling back to dwmapi.dll" "WARNING"
+        return @{ PreferredDll = "dwmapi.dll" }
     }
-    # Enterprise/Education/diger
-    else {
-        Write-Log "Enterprise/Other: Normal priority" "SUCCESS"
-        if (-not $results["dwmapi.dll"])    { return @{ PreferredDll = "dwmapi.dll" } }
-        if (-not $results["winhttp.dll"])   { return @{ PreferredDll = "winhttp.dll" } }
-        if (-not $results["xinput1_4.dll"]) { return @{ PreferredDll = "xinput1_4.dll" } }
+    elseif (-not $results["xinput1_4.dll"]) {
+        Write-Log "winhttp & dwmapi are KnownDLLs, using xinput1_4.dll" "WARNING"
+        return @{ PreferredDll = "xinput1_4.dll" }
     }
 
     # Hicbiri calismazsa xinput1_4
