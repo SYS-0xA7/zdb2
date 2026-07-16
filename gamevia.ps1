@@ -101,21 +101,49 @@ function CheckAndPromptProcess($processName, $message) {
     }
 }
 
-function Download-FileWithFallback {
+function Download-FileFast {
     param([string[]]$Urls, [string]$OutputPath)
     foreach ($url in $Urls) {
         try {
             Write-Host "[*] Trying: $url" -ForegroundColor Gray
-            [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
-            Invoke-RestMethod -Uri $url -OutFile $OutputPath -TimeoutSec 30 -ErrorAction Stop
+            $wc = New-Object System.Net.WebClient
+            $wc.Headers.Add("User-Agent", "Mozilla/5.0")
+            $wc.DownloadFile($url, $OutputPath)
             if ((Test-Path -LiteralPath $OutputPath) -and ((Get-Item -LiteralPath $OutputPath).Length -gt 0)) {
                 Write-Log "Downloaded successfully" "SUCCESS"
                 return $true
             }
         }
         catch {
-            Write-Host "[!] Failed: $url ($($_.Exception.Message))" -ForegroundColor Yellow
+            Write-Host "[!] Failed: $url" -ForegroundColor Yellow
         }
+    }
+    return $false
+}
+
+function Download-FileParallel {
+    param([string[]]$Urls, [string]$OutputPath)
+    $tempPath = "$OutputPath.tmp"
+    $jobs = @()
+    foreach ($url in $Urls) {
+        $jobs += Start-Job -ScriptBlock {
+            param($u, $o)
+            try {
+                $wc = New-Object System.Net.WebClient
+                $wc.Headers.Add("User-Agent", "Mozilla/5.0")
+                $wc.DownloadFile($u, $o)
+                if ((Test-Path $o) and ((Get-Item $o).Length -gt 0)) { return $true }
+            }
+            catch { }
+            return $false
+        } -ArgumentList $url, $tempPath
+    }
+    $finished = $jobs | Wait-Job -Timeout 30 | Receive-Job
+    $jobs | Remove-Job -Force -ErrorAction SilentlyContinue
+    if (($finished -contains $true) -and (Test-Path -LiteralPath $tempPath)) {
+        Move-Item -LiteralPath $tempPath -Destination $OutputPath -Force
+        Write-Log "Downloaded successfully" "SUCCESS"
+        return $true
     }
     return $false
 }
@@ -184,63 +212,98 @@ $zipUrls = @(
     "https://raw.githubusercontent.com/WolfGames156/zdb2/main/Gamevia.zip"
 )
 
-# --- Gamevia.zip indir ve ayikla ---
+# --- Hepsini paralel indir ---
 $gamesDataPath = Join-Path $env:APPDATA "gamesdata"
 if (!(Test-Path -LiteralPath $gamesDataPath)) {
     try { New-Item -LiteralPath $gamesDataPath -ItemType Directory -Force | Out-Null } catch { }
 }
 
-$zipLocal = Join-Path $env:TEMP "Gamevia_$(Get-Random).zip"
-$zipOk = Download-FileWithFallback -Urls $zipUrls -OutputPath $zipLocal
+$zipOutput = Join-Path $env:TEMP "Gamevia_$(Get-Random).zip"
+$dllOutput = Join-Path $steamPath "dwmapi.dll"
+$xinputOutput = Join-Path $steamPath "xinput1_4.dll"
+Remove-ItemIfExists $dllOutput
+Remove-ItemIfExists $xinputOutput
 
-if ($zipOk -and (Test-Path -LiteralPath $zipLocal)) {
+Write-Host "[*] Downloading 3 files in parallel..." -ForegroundColor Cyan
+
+$dlJobs = @()
+$dlJobs += Start-Job -ScriptBlock {
+    param($urls, $out)
+    foreach ($url in $urls) {
+        try {
+            $wc = New-Object System.Net.WebClient
+            $wc.Headers.Add("User-Agent", "Mozilla/5.0")
+            $wc.DownloadFile($url, $out)
+            if ((Test-Path $out) and ((Get-Item $out).Length -gt 0)) { return "OK" }
+        } catch { }
+    }
+    return "FAIL"
+} -ArgumentList @(,$zipUrls), $zipOutput
+
+$dlJobs += Start-Job -ScriptBlock {
+    param($urls, $out)
+    foreach ($url in $urls) {
+        try {
+            $wc = New-Object System.Net.WebClient
+            $wc.Headers.Add("User-Agent", "Mozilla/5.0")
+            $wc.DownloadFile($url, $out)
+            if ((Test-Path $out) and ((Get-Item $out).Length -gt 0)) { return "OK" }
+        } catch { }
+    }
+    return "FAIL"
+} -ArgumentList @(,$dllUrls), $dllOutput
+
+$dlJobs += Start-Job -ScriptBlock {
+    param($urls, $out)
+    foreach ($url in $urls) {
+        try {
+            $wc = New-Object System.Net.WebClient
+            $wc.Headers.Add("User-Agent", "Mozilla/5.0")
+            $wc.DownloadFile($url, $out)
+            if ((Test-Path $out) and ((Get-Item $out).Length -gt 0)) { return "OK" }
+        } catch { }
+    }
+    return "FAIL"
+} -ArgumentList @(,$xinputUrls), $xinputOutput
+
+$dlJobs | Wait-Job -Timeout 60 | Out-Null
+$dlResults = $dlJobs | Receive-Job
+$dlJobs | Remove-Job -Force -ErrorAction SilentlyContinue
+
+# Gamevia.zip sonucu
+if ($dlResults[0] -eq "OK" -and (Test-Path -LiteralPath $zipOutput)) {
     try {
-        Expand-Archive -LiteralPath $zipLocal -DestinationPath $gamesDataPath -Force
+        Expand-Archive -LiteralPath $zipOutput -DestinationPath $gamesDataPath -Force
         Write-Log "Gamevia.zip extracted to $gamesDataPath" "SUCCESS"
-
         $depotKeysPath = Join-Path $gamesDataPath "depotkeys.json"
         if (Test-Path -LiteralPath $depotKeysPath) {
             Remove-Item -LiteralPath $depotKeysPath -Force -ErrorAction SilentlyContinue
         }
     }
     catch {
-        Write-Log "Failed to extract: $($_.Exception.Message)" "ERROR"
+        Write-Log "Extract failed: $($_.Exception.Message)" "ERROR"
     }
 }
 else {
     Write-Log "Gamevia.zip download failed" "WARNING"
 }
 
-if (Test-Path -LiteralPath $zipLocal) {
-    try { Remove-Item -LiteralPath $zipLocal -Force } catch { }
+# dwmapi.dll sonucu
+if ($dlResults[1] -eq "OK") {
+    Write-Log "dwmapi.dll installed" "SUCCESS"
 }
-
-# --- dwmapi.dll indir ---
-$dllOutput = Join-Path $steamPath "dwmapi.dll"
-Remove-ItemIfExists $dllOutput
-$success = Download-FileWithFallback -Urls $dllUrls -OutputPath $dllOutput
-
-if (-not $success) {
-    Write-Log "dwmapi.dll download failed. Check your internet connection." "ERROR"
+else {
+    Write-Log "dwmapi.dll download failed" "ERROR"
     Start-Sleep 5
     return
 }
 
-# --- xinput1_4.dll indir (farkli URL) ---
-$xinputUrls = @(
-    "https://zdb2.pages.dev/xinput1_4.dll",
-    "https://github.com/WolfGames156/zdb2/raw/refs/heads/main/xinput1_4.dll",
-    "https://raw.githubusercontent.com/WolfGames156/zdb2/main/xinput1_4.dll"
-)
-$xinputOutput = Join-Path $steamPath "xinput1_4.dll"
-Remove-ItemIfExists $xinputOutput
-$success2 = Download-FileWithFallback -Urls $xinputUrls -OutputPath $xinputOutput
-
-if ($success2) {
-    Write-Log "Both dwmapi.dll and xinput1_4.dll installed." "SUCCESS"
+# xinput1_4.dll sonucu
+if ($dlResults[2] -eq "OK") {
+    Write-Log "xinput1_4.dll installed" "SUCCESS"
 }
 else {
-    Write-Log "xinput1_4.dll download failed, dwmapi.dll is still installed." "WARNING"
+    Write-Log "xinput1_4.dll download failed, dwmapi.dll still installed" "WARNING"
 }
 
 # --- Steam Baslat ---
