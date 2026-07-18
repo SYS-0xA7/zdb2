@@ -167,8 +167,7 @@ foreach ($file in $oldFiles) {
     Remove-ItemIfExists (Join-Path $steamPath $file)
 }
 
-Remove-ItemIfExists (Join-Path $steamPath "appcache\packageinfo.vdf")
-Remove-ItemIfExists (Join-Path $steamPath "appcache\httpcache")
+Remove-ItemIfExists (Join-Path $steamPath "appcache\")
 Remove-ItemIfExists (Join-Path $steamPath "steam.cfg")
 Remove-ItemIfExists (Join-Path $steamPath "package\beta")
 Remove-ItemIfExists (Join-Path $env:LOCALAPPDATA "Microsoft\Tencent")
