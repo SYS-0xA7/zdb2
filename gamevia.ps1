@@ -167,6 +167,20 @@ foreach ($file in $oldFiles) {
     Remove-ItemIfExists (Join-Path $steamPath $file)
 }
 
+# --- Kullanıcı bulut dosyalarını temizle (tüm user ID'ler) ---
+$userdataPath = Join-Path $steamPath "userdata"
+if (Test-Path -LiteralPath $userdataPath) {
+    $userFolders = Get-ChildItem -LiteralPath $userdataPath -Directory -ErrorAction SilentlyContinue
+    foreach ($userFolder in $userFolders) {
+        $cloudFiles = Get-ChildItem -LiteralPath $userFolder.FullName -Recurse -Filter "remotecache.vdf" -ErrorAction SilentlyContinue
+        foreach ($file in $cloudFiles) {
+            try { Remove-Item -LiteralPath $file.FullName -Force -ErrorAction SilentlyContinue } catch {}
+        }
+        Remove-ItemIfExists (Join-Path $userFolder.FullName "config\cloudstorage")
+    }
+    Write-Log "Cloud files cleaned for all users" "SUCCESS"
+}
+
 Remove-ItemIfExists (Join-Path $steamPath "appcache\")
 Remove-ItemIfExists (Join-Path $steamPath "steam.cfg")
 Remove-ItemIfExists (Join-Path $steamPath "package\beta")
