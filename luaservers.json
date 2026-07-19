@@ -5,7 +5,7 @@
       "enabled": true
     },
     {
-      "url": "https://mirror.ghproxy.com/https://github.com/WolfGames156/zoream_hub/releases/download/luamanifests/<appid>.lua",
+      "url": "https://ghfast.top/https://github.com/WolfGames156/zoream_hub/releases/download/luamanifests/<appid>.lua",
       "enabled": true
     },
     {
@@ -13,7 +13,7 @@
       "enabled": true
     },
     {
-      "url": "https://mirror.ghproxy.com/https://github.com/WolfGames156/zoream_hub/releases/download/luamanifests/<appid>.zip",
+      "url": "https://ghfast.top/https://github.com/WolfGames156/zoream_hub/releases/download/luamanifests/<appid>.zip",
       "enabled": true
     },
     {
@@ -31,7 +31,7 @@
       "enabled": true
     },
     {
-      "url": "https://mirror.ghproxy.com/https://raw.githubusercontent.com/sushi-dev55-alt/sushitools-games-repo-alt/refs/heads/main/<appid>.zip",
+      "url": "https://ghfast.top/https://raw.githubusercontent.com/sushi-dev55-alt/sushitools-games-repo-alt/refs/heads/main/<appid>.zip",
       "enabled": true
     },
     {
@@ -39,7 +39,7 @@
       "enabled": true
     },
     {
-      "url": "https://mirror.ghproxy.com/https://raw.githubusercontent.com/skyflarefox/Skyapi/refs/heads/main/<appid>.zip",
+      "url": "https://ghfast.top/https://raw.githubusercontent.com/skyflarefox/Skyapi/refs/heads/main/<appid>.zip",
       "enabled": true
     },
     {
@@ -47,7 +47,7 @@
       "enabled": true
     },
     {
-      "url": "https://mirror.ghproxy.com/https://codeload.github.com/SteamAutoCracks/ManifestHub/zip/refs/heads/<appid>",
+      "url": "https://ghfast.top/https://codeload.github.com/SteamAutoCracks/ManifestHub/zip/refs/heads/<appid>",
       "enabled": true
     }
   ],
