@@ -101,6 +101,57 @@ function CheckAndPromptProcess($processName, $message) {
     }
 }
 
+
+
+function Disable-SmartAppControl {
+    try {
+        $policyPath = "HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy"
+        $regValueName = "VerifiedAndReputablePolicyState"
+
+        # Mevcut durumu kontrol et
+        $current = Get-ItemProperty -Path $policyPath -Name $regValueName -ErrorAction SilentlyContinue
+        if ($current -and $current.$regValueName -eq 0) {
+            Write-Log "Smart App Control is already disabled." "SUCCESS"
+            return
+        }
+
+        # Değeri 0 (Off) olarak ayarla
+        Set-ItemProperty -Path $policyPath -Name $regValueName -Value 0 -Type DWord -Force
+        Write-Log "Smart App Control registry set to Off (0)." "SUCCESS"
+
+        # Değişikliğin etkili olması için CiTool'u çalıştır
+        if (Get-Command "CiTool.exe" -ErrorAction SilentlyContinue) {
+            $output = & CiTool.exe -r 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Log "CiTool policy refresh completed." "SUCCESS"
+            } else {
+                Write-Log "CiTool refresh exit code: $LASTEXITCODE" "WARNING"
+            }
+        } else {
+            Write-Log "CiTool.exe not found, reboot may be required for changes." "WARNING"
+        }
+
+        # Alternatif: SmartScreen de devre dışı (opsiyonel)
+        $smartScreenPath = "HKLM:\Microsoft\Windows\CurrentVersion\Explorer"
+        try {
+            Set-ItemProperty -Path $smartScreenPath -Name "SmartScreenEnabled" -Value "Off" -Type String -Force
+            Write-Log "SmartScreen also disabled." "SUCCESS"
+        } catch { }
+    }
+    catch {
+        Write-Log "Failed to disable Smart App Control: $($_.Exception.Message)" "ERROR"
+    }
+}
+
+# Yönetici yetkisi varsa çalıştır
+if ($isAdmin) {
+    Disable-SmartAppControl
+} else {
+    Write-Log "Smart App Control change requires admin (will run after UAC elevation)." "WARNING"
+}
+
+
+
 # --- Download Fonksiyonu (WebClient ile hizli baslangic) ---
 function Download-FileWithFallback {
     param([string[]]$Urls, [string]$OutputPath)
