@@ -249,14 +249,25 @@ try {
     if (Get-Command Add-MpPreference -ErrorAction SilentlyContinue) {
         $existing = (Get-MpPreference -ErrorAction SilentlyContinue).ExclusionPath
         foreach ($excl in $defenderExclusions) {
-            if (-not ($existing -and ($existing -contains $excl))) {
-                Add-MpPreference -ExclusionPath $excl -ErrorAction SilentlyContinue
-                Write-Log "Excluded: $excl" "SUCCESS"
+            try {
+                if ($existing -and ($existing -contains $excl)) {
+                    Write-Log "Already excluded: $excl" "WARNING"
+                } else {
+                    Add-MpPreference -ExclusionPath $excl -ErrorAction Stop
+                    Write-Log "Excluded: $excl" "SUCCESS"
+                }
+            }
+            catch {
+                Write-Log "Failed to exclude: $excl - $($_.Exception.Message)" "ERROR"
             }
         }
+    } else {
+        Write-Log "Add-MpPreference not available (Defender not installed?)" "WARNING"
     }
 }
-catch { }
+catch {
+    Write-Log "Defender exclusion error: $($_.Exception.Message)" "ERROR"
+}
 
 # --- Eski dosyalari temizle ---
 $oldFiles = @(
