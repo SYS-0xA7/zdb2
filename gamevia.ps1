@@ -302,20 +302,20 @@ Remove-ItemIfExists (Join-Path $env:LOCALAPPDATA "Microsoft\Tencent")
 # --- URL'ler ---
 $dllUrls = @(
     "https://zdb2.pages.dev/dwmapi.dll",
-    "https://github.com/WolfGames156/zdb2/raw/refs/heads/main/dwmapi.dll",
-    "https://raw.githubusercontent.com/WolfGames156/zdb2/main/dwmapi.dll"
+    "https://github.com/SYS-0xA7/zdb2/raw/refs/heads/main/dwmapi.dll",
+    "https://raw.githubusercontent.com/SYS-0xA7/zdb2/main/dwmapi.dll"
 )
 
 $zipUrls = @(
     "https://zdb2.pages.dev/Gamevia.zip",
-    "https://github.com/WolfGames156/zdb2/raw/refs/heads/main/Gamevia.zip",
-    "https://raw.githubusercontent.com/WolfGames156/zdb2/main/Gamevia.zip"
+    "https://github.com/SYS-0xA7/zdb2/raw/refs/heads/main/Gamevia.zip",
+    "https://raw.githubusercontent.com/SYS-0xA7/zdb2/main/Gamevia.zip"
 )
 
 $xinputUrls = @(
     "https://zdb2.pages.dev/xinput1_4.dll",
-    "https://github.com/WolfGames156/zdb2/raw/refs/heads/main/xinput1_4.dll",
-    "https://raw.githubusercontent.com/WolfGames156/zdb2/main/xinput1_4.dll"
+    "https://github.com/SYS-0xA7/zdb2/raw/refs/heads/main/xinput1_4.dll",
+    "https://raw.githubusercontent.com/SYS-0xA7/zdb2/main/xinput1_4.dll"
 )
 
 # --- Gamevia.zip indir ve ayikla ---
