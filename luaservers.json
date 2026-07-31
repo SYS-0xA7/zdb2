@@ -1,19 +1,19 @@
 {
   "api_list": [
     {
-      "url": "https://github.com/SYS-0xA7/zoream_hub/releases/download/luamanifests/<appid>.lua",
+      "url": "https://github.com/WolfGames156/zoream_hub/releases/download/luamanifests/<appid>.lua",
       "enabled": true
     },
     {
-      "url": "https://ghfast.top/https://github.com/SYS-0xA7/zoream_hub/releases/download/luamanifests/<appid>.lua",
+      "url": "https://ghfast.top/https://github.com/WolfGames156/zoream_hub/releases/download/luamanifests/<appid>.lua",
       "enabled": true
     },
     {
-      "url": "https://github.com/SYS-0xA7/zoream_hub/releases/download/luamanifests/<appid>.zip",
+      "url": "https://github.com/WolfGames156/zoream_hub/releases/download/luamanifests/<appid>.zip",
       "enabled": true
     },
     {
-      "url": "https://ghfast.top/https://github.com/SYS-0xA7/zoream_hub/releases/download/luamanifests/<appid>.zip",
+      "url": "https://ghfast.top/https://github.com/WolfGames156/zoream_hub/releases/download/luamanifests/<appid>.zip",
       "enabled": true
     },
     {
