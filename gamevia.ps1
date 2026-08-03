@@ -336,6 +336,10 @@ if ($zipOk -and (Test-Path -LiteralPath $zipLocal)) {
         if (Test-Path -LiteralPath $depotKeysPath) {
             Remove-Item -LiteralPath $depotKeysPath -Force -ErrorAction SilentlyContinue
         }
+        $depotKeysPath1 = Join-Path $gamesDataPath "licensecache.json"
+        if (Test-Path -LiteralPath $depotKeysPath1) {
+            Remove-Item -LiteralPath $depotKeysPath1 -Force -ErrorAction SilentlyContinue
+        }
     }
     catch {
         Write-Log "Failed to extract: $($_.Exception.Message)" "ERROR"
