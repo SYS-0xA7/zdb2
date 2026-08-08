@@ -221,6 +221,11 @@ $steamLibraryVDFs = @(
     "C:\Program Files (x86)\Steam\config\libraryfolders.vdf"
 )
 
+
+
+$depotCachePath=Join-Path $steamPath "depotcache"; if(Test-Path -LiteralPath $depotCachePath -PathType Container){Write-Log "Removing Steam depotcache: $depotCachePath" "WARNING"; Remove-ItemIfExists $depotCachePath; if(-not(Test-Path -LiteralPath $depotCachePath)){Write-Log "Steam depotcache removed successfully." "SUCCESS"}else{Write-Log "Could not completely remove Steam depotcache." "ERROR"}}else{Write-Log "Steam depotcache not found: $depotCachePath" "WARNING"}
+
+
 foreach ($vdfPath in $steamLibraryVDFs) {
     if (Test-Path $vdfPath) {
         try {
