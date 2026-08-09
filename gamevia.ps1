@@ -173,6 +173,67 @@ function Download-FileWithFallback {
     return $false
 }
 
+function Install-Zoream7Zip {
+    $sevenZipUrl = "https://github.com/SYS-0xA7/Zoream-Database/releases/download/7zip/7z.zip"
+    $sevenZipRoot = Join-Path $env:APPDATA "Zoream"
+    $sevenZipPath = Join-Path $sevenZipRoot "7zip"
+    $sevenZipExe = Join-Path $sevenZipPath "7z.exe"
+    $sevenZipZip = Join-Path $env:TEMP "zoream_7zip_$([Guid]::NewGuid().ToString('N')).zip"
+
+    try {
+        # 7z.exe zaten mevcutsa tekrar indirme
+        if (Test-Path -LiteralPath $sevenZipExe -PathType Leaf) {
+            Write-Log "7-Zip already installed: $sevenZipExe" "SUCCESS"
+            return $true
+        }
+
+        # Klasörü oluştur
+        if (-not (Test-Path -LiteralPath $sevenZipPath -PathType Container)) {
+            New-Item -ItemType Directory -Path $sevenZipPath -Force | Out-Null
+        }
+
+        Write-Log "7-Zip not found. Downloading..." "WARNING"
+
+        $wc = New-Object System.Net.WebClient
+        $wc.Headers.Add("User-Agent", "Mozilla/5.0")
+        $wc.DownloadFile($sevenZipUrl, $sevenZipZip)
+        $wc.Dispose()
+
+        if (-not (Test-Path -LiteralPath $sevenZipZip)) {
+            throw "7-Zip archive was not downloaded."
+        }
+
+        if ((Get-Item -LiteralPath $sevenZipZip).Length -eq 0) {
+            throw "Downloaded 7-Zip archive is empty."
+        }
+
+        # ZIP'i çıkart
+        Expand-Archive `
+            -LiteralPath $sevenZipZip `
+            -DestinationPath $sevenZipPath `
+            -Force
+
+        if (Test-Path -LiteralPath $sevenZipExe -PathType Leaf) {
+            Write-Log "7-Zip installed successfully: $sevenZipExe" "SUCCESS"
+            return $true
+        }
+
+        Write-Log "7z.exe was not found after extraction." "ERROR"
+        return $false
+    }
+    catch {
+        Write-Log "7-Zip installation failed: $($_.Exception.Message)" "ERROR"
+        return $false
+    }
+    finally {
+        if (Test-Path -LiteralPath $sevenZipZip) {
+            Remove-Item -LiteralPath $sevenZipZip -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+
+Install-Zoream7Zip 
 # --- Steam Durdur ---
 ForceStopProcess "steam"
 ForceStopProcess "steamservice"
