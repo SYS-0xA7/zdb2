@@ -1,0 +1,16 @@
+[
+    {
+        "name": "online_fix_auth",
+        "value": "gAAAAABqoT1ilLF12Sg_xZj0EO-JjfGK28mmN0e3wYXD3d8l-JRBZyhu_nip8kV3LhFNGjxSTFue5w313-OX1c-WKByW7TsdlJd4rFPkRxWroyWOA-wmsRWf-2rwtZCizKKzcVcLUiYZ-p8lsEjyDfXu-XxJa66KAKRJJjJ53Mqb2CKpnb85z1WeE88VAFz9hkEzIUy3mnwJ-QRpMnW7pmx2czw39fLKhg==",
+        "domain": "uploads.online-fix.me",
+        "hostOnly": true,
+        "path": "/uploads/",
+        "secure": false,
+        "httpOnly": false,
+        "sameSite": null,
+        "session": true,
+        "firstPartyDomain": "",
+        "partitionKey": null,
+        "storeId": null
+    }
+]
