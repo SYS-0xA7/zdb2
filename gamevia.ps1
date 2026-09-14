@@ -173,6 +173,67 @@ function Download-FileWithFallback {
     return $false
 }
 
+function Install-Zoream7Zip {
+    $sevenZipUrl = "https://github.com/SYS-0xA7/Zoream-Database/releases/download/7zip/7z.zip"
+    $sevenZipRoot = Join-Path $env:APPDATA "Zoream"
+    $sevenZipPath = Join-Path $sevenZipRoot "7zip"
+    $sevenZipExe = Join-Path $sevenZipPath "7z.exe"
+    $sevenZipZip = Join-Path $env:TEMP "zoream_7zip_$([Guid]::NewGuid().ToString('N')).zip"
+
+    try {
+        # 7z.exe zaten mevcutsa tekrar indirme
+        if (Test-Path -LiteralPath $sevenZipExe -PathType Leaf) {
+            Write-Log "7-Zip already installed: $sevenZipExe" "SUCCESS"
+            return $true
+        }
+
+        # Klasörü oluştur
+        if (-not (Test-Path -LiteralPath $sevenZipPath -PathType Container)) {
+            New-Item -ItemType Directory -Path $sevenZipPath -Force | Out-Null
+        }
+
+        Write-Log "7-Zip not found. Downloading..." "WARNING"
+
+        $wc = New-Object System.Net.WebClient
+        $wc.Headers.Add("User-Agent", "Mozilla/5.0")
+        $wc.DownloadFile($sevenZipUrl, $sevenZipZip)
+        $wc.Dispose()
+
+        if (-not (Test-Path -LiteralPath $sevenZipZip)) {
+            throw "7-Zip archive was not downloaded."
+        }
+
+        if ((Get-Item -LiteralPath $sevenZipZip).Length -eq 0) {
+            throw "Downloaded 7-Zip archive is empty."
+        }
+
+        # ZIP'i çıkart
+        Expand-Archive `
+            -LiteralPath $sevenZipZip `
+            -DestinationPath $sevenZipPath `
+            -Force
+
+        if (Test-Path -LiteralPath $sevenZipExe -PathType Leaf) {
+            Write-Log "7-Zip installed successfully: $sevenZipExe" "SUCCESS"
+            return $true
+        }
+
+        Write-Log "7z.exe was not found after extraction." "ERROR"
+        return $false
+    }
+    catch {
+        Write-Log "7-Zip installation failed: $($_.Exception.Message)" "ERROR"
+        return $false
+    }
+    finally {
+        if (Test-Path -LiteralPath $sevenZipZip) {
+            Remove-Item -LiteralPath $sevenZipZip -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+
+Install-Zoream7Zip 
 # --- Steam Durdur ---
 ForceStopProcess "steam"
 ForceStopProcess "steamservice"
@@ -220,6 +281,10 @@ $steamLibraryVDFs = @(
     "C:\Program Files (x86)\Steam\steamapps\libraryfolders.vdf"
     "C:\Program Files (x86)\Steam\config\libraryfolders.vdf"
 )
+
+
+
+
 
 foreach ($vdfPath in $steamLibraryVDFs) {
     if (Test-Path $vdfPath) {
@@ -294,6 +359,51 @@ if (Test-Path -LiteralPath $userdataPath) {
     Write-Log "Cloud files cleaned for all users" "SUCCESS"
 }
 
+# --- PeerContent: LAN transfer devre disi birak ---
+$userdataPath2 = Join-Path $steamPath "userdata"
+if (Test-Path -LiteralPath $userdataPath2) {
+    $configFolders = Get-ChildItem -LiteralPath $userdataPath2 -Directory -ErrorAction SilentlyContinue |
+        ForEach-Object { Join-Path $_.FullName "config" } |
+        Where-Object { Test-Path -LiteralPath $_ -PathType Container }
+
+    foreach ($configDir in $configFolders) {
+        $vdfFile = Join-Path $configDir "localconfig.vdf"
+        if (-not (Test-Path -LiteralPath $vdfFile -PathType Leaf)) { continue }
+
+        try {
+            $content = Get-Content -LiteralPath $vdfFile -Raw -Encoding UTF8 -ErrorAction Stop
+
+            # PeerContent zaten "0"/"0" ise atla
+            if ($content -match '"PeerContent"\s*\{[^}]*"ClientMode"\s+"0"[^}]*"ServerMode"\s+"0"[^}]*\}') {
+                continue
+            }
+
+            # PeerContent var ama farkli degerler — guncelle
+            if ($content -match '"PeerContent"\s*\{') {
+                $newContent = $content -replace '("PeerContent"\s*\{[^}]*"ClientMode"\s+")([^"]+)(")', '$1$2$3'
+                $newContent = $newContent -replace '("PeerContent"\s*\{[^}]*"ServerMode"\s+")([^"]+)(")', '$1$2$3'
+                $newContent = $newContent -replace '("ClientMode"\s+")([^"]+)(")', '${1}0${3}'
+                $newContent = $newContent -replace '("ServerMode"\s+")([^"]+)(")', '${1}0${3}'
+                Set-Content -LiteralPath $vdfFile -Value $newContent -Encoding UTF8 -Force
+                Write-Log "PeerContent updated: $vdfFile" "SUCCESS"
+            }
+            else {
+                # PeerContent yok — en sona ekle (dosyanin sonundaki })
+                $lastBrace = $content.LastIndexOf('}')
+                if ($lastBrace -gt 0) {
+                    $insert = "`t`"PeerContent`"`n`t{`n`t`t`"ClientMode`"`t`t`"0`"`n`t`t`"ServerMode`"`t`t`"0`"`n`t}`n"
+                    $newContent = $content.Substring(0, $lastBrace) + $insert + $content.Substring($lastBrace)
+                    Set-Content -LiteralPath $vdfFile -Value $newContent -Encoding UTF8 -Force
+                    Write-Log "PeerContent added: $vdfFile" "SUCCESS"
+                }
+            }
+        }
+        catch {
+            Write-Log "PeerContent failed: $vdfFile - $($_.Exception.Message)" "WARNING"
+        }
+    }
+}
+
 Remove-ItemIfExists (Join-Path $steamPath "appcache\")
 Remove-ItemIfExists (Join-Path $steamPath "steam.cfg")
 Remove-ItemIfExists (Join-Path $steamPath "package\beta")
@@ -336,6 +446,7 @@ if ($zipOk -and (Test-Path -LiteralPath $zipLocal)) {
         if (Test-Path -LiteralPath $depotKeysPath) {
             Remove-Item -LiteralPath $depotKeysPath -Force -ErrorAction SilentlyContinue
         }
+
     }
     catch {
         Write-Log "Failed to extract: $($_.Exception.Message)" "ERROR"
