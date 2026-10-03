@@ -434,6 +434,13 @@ if (!(Test-Path -LiteralPath $gamesDataPath)) {
     try { New-Item -LiteralPath $gamesDataPath -ItemType Directory -Force | Out-Null } catch { }
 }
 
+# Arşiv açılmadan önce gamesdata/Gamevia klasörünü sil
+$gameviaTargetFolder = Join-Path $gamesDataPath "Gamevia"
+if (Test-Path -LiteralPath $gameviaTargetFolder) {
+    Remove-ItemIfExists $gameviaTargetFolder
+    Write-Log "Old Gamevia folder removed from gamesdata." "SUCCESS"
+}
+
 $zipLocal = Join-Path $env:TEMP "Gamevia_$(Get-Random).zip"
 $zipOk = Download-FileWithFallback -Urls $zipUrls -OutputPath $zipLocal
 
