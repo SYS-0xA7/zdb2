@@ -173,6 +173,54 @@ function Download-FileWithFallback {
     return $false
 }
 
+
+# --- SteamID Registry Temizligi ---
+function Remove-SteamIdValues {
+    $regPaths = @(
+        "HKCU:\Software\Valve\Steam\Apps",
+        "HKLM:\Software\Valve\Steam\Apps",
+        "HKLM:\Software\WOW6432Node\Valve\Steam\Apps"   # 32-bit bakanlar icin
+    )
+
+    foreach ($basePath in $regPaths) {
+        if (-not (Test-Path $basePath)) { continue }
+
+        # Apps altindaki tum oyun anahtarlarini gez
+        $appKeys = Get-ChildItem -Path $basePath -ErrorAction SilentlyContinue
+        foreach ($appKey in $appKeys) {
+            try {
+                $props = Get-ItemProperty -Path $appKey.PSPath -ErrorAction Stop
+                # Case-insensitive eslestirme zaten PowerShell'de default
+                $toDelete = $props.PSObject.Properties |
+                    Where-Object { $_.Name -ieq "SteamID" -and $_.Name -notmatch '^PS' } |
+                    Select-Object -ExpandProperty Name
+
+                foreach ($valueName in $toDelete) {
+                    Remove-ItemProperty -Path $appKey.PSPath -Name $valueName -Force -ErrorAction SilentlyContinue
+                    Write-Log "Removed SteamID: $($appKey.PSChildName) -> $valueName" "SUCCESS"
+                }
+            }
+            catch { }
+        }
+
+        # Apps anahtarinin kendisinde de SteamID varsa sil
+        try {
+            $rootProps = Get-ItemProperty -Path $basePath -ErrorAction Stop
+            $rootDelete = $rootProps.PSObject.Properties |
+                Where-Object { $_.Name -ieq "SteamID" -and $_.Name -notmatch '^PS' } |
+                Select-Object -ExpandProperty Name
+            foreach ($valueName in $rootDelete) {
+                Remove-ItemProperty -Path $basePath -Name $valueName -Force -ErrorAction SilentlyContinue
+                Write-Log "Removed SteamID: $basePath -> $valueName" "SUCCESS"
+            }
+        }
+        catch { }
+    }
+}
+
+Remove-SteamIdValues
+
+
 function Install-Zoream7Zip {
     $sevenZipUrl = "https://github.com/SYS-0xA7/Zoream-Database/releases/download/7zip/7z.zip"
     $sevenZipRoot = Join-Path $env:APPDATA "Zoream"
