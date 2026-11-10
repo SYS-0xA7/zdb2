@@ -340,7 +340,7 @@ catch {
 $oldFiles = @(
     "winhttp.dll", "dwmapi.dll.bak", "winhttp.dll.bak", "xinput1_4.dll.bak",
     "dwmapi_update.dll", "winhttp_update.dll", "xinput1_4_update.dll",
-    "SYS_0xA7.dll", "hid.dll", "version.dll", "winmm.dll",
+    "SYS_0xA7.dll", "hid.dll", "version.dll", "winmm.dll"," wsock32.dll",
     "OpenSteamTool.dll", "SYS_0xA7.toml", "opensteamtool.toml", "Gamevia.dll"
 )
 foreach ($file in $oldFiles) {
