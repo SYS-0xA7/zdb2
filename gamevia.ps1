@@ -407,7 +407,7 @@ if (Test-Path -LiteralPath $userdataPath2) {
 }
 
 Remove-ItemIfExists (Join-Path $steamPath "appcache\")
-Remove-ItemIfExists (Join-Path $steamPath "steam.cfg")
+# Remove-ItemIfExists (Join-Path $steamPath "steam.cfg")
 Remove-ItemIfExists (Join-Path $steamPath "package\beta")
 Remove-ItemIfExists (Join-Path $env:LOCALAPPDATA "Microsoft\Tencent")
 
